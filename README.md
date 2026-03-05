@@ -3,7 +3,7 @@
 A PySpark **library** (installable wheel) that assesses and recommends which
 tables and columns should use **Data Clustering** in Microsoft Fabric Warehouse.
 
-It runs entirely inside a **Fabric Spark notebook** — the Synapse SQL connector
+It runs entirely inside a **Fabric Spark notebook** — the Microsoft Fabric Data Warehouse
 comes pre-installed in the Fabric runtime, Query Insights is enabled by default
 on every warehouse, and no Lakehouse or data source attachment is required.
 

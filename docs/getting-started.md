@@ -13,7 +13,7 @@ This guide walks you through building, installing, and running the
 | **Python 3.9+** | Only needed if building from source (not required on Fabric) |
 
 > **Note:** No Lakehouse attachment or external data source is required.
-> The Synapse SQL connector is pre-installed in the Fabric Spark runtime.
+> The Microsoft Fabric Data Warehouse connector is pre-installed in the Fabric Spark runtime.
 
 ## Getting the Wheel
 

@@ -39,7 +39,7 @@ except ImportError:
 # Low-level readers
 # ------------------------------------------------------------------
 
-def read_synapse_query(
+def read_warehouse_query(
     spark: SparkSession,
     warehouse: str,
     query: str,
@@ -66,7 +66,7 @@ def read_synapse_query(
     return reader.synapsesql(query)
 
 
-def read_synapse_table(
+def read_warehouse_table(
     spark: SparkSession,
     warehouse: str,
     schema: str,
@@ -119,7 +119,7 @@ def get_full_column_metadata(
         JOIN sys.columns c  ON t.object_id    = c.object_id
         JOIN sys.types   ty ON c.user_type_id = ty.user_type_id
     """
-    return read_synapse_query(spark, warehouse, query, workspace_id, warehouse_id)
+    return read_warehouse_query(spark, warehouse, query, workspace_id, warehouse_id)
 
 
 def get_current_clustering_config(
@@ -154,7 +154,7 @@ def get_current_clustering_config(
         JOIN sys.types         ty ON c.user_type_id = ty.user_type_id
         WHERE ic.data_clustering_ordinal > 0
     """
-    return read_synapse_query(spark, warehouse, query, workspace_id, warehouse_id).orderBy(
+    return read_warehouse_query(spark, warehouse, query, workspace_id, warehouse_id).orderBy(
         "schema_name", "table_name", "clustering_ordinal"
     )
 
@@ -198,7 +198,7 @@ def get_table_row_counts(
                 f"SELECT COUNT_BIG(*) AS cnt "
                 f"FROM [{schema_name}].[{table_name}]"
             )
-            cnt_row = read_synapse_query(
+            cnt_row = read_warehouse_query(
                 spark, warehouse, q, workspace_id, warehouse_id
             ).collect()[0]
             count = cnt_row["cnt"]
@@ -240,7 +240,7 @@ def get_frequently_run_queries(
     try:
         where = f"WHERE number_of_runs >= {min_runs}" if min_runs > 1 else ""
         query = f"SELECT * FROM queryinsights.frequently_run_queries {where}"
-        return read_synapse_query(spark, warehouse, query, workspace_id, warehouse_id)
+        return read_warehouse_query(spark, warehouse, query, workspace_id, warehouse_id)
     except Exception as exc:
         print(
             f"  [WARN] Could not read queryinsights.frequently_run_queries: "
@@ -266,7 +266,7 @@ def get_long_running_queries(
 ) -> DataFrame:
     """Read queryinsights.long_running_queries for additional context."""
     try:
-        return read_synapse_query(
+        return read_warehouse_query(
             spark, warehouse,
             "SELECT * FROM queryinsights.long_running_queries",
             workspace_id, warehouse_id,
@@ -317,7 +317,7 @@ def estimate_column_cardinality(
             f"APPROX_COUNT_DISTINCT([{column_name}]) AS distinct_cnt "
             f"FROM [{schema_name}].[{table_name}]"
         )
-        row = read_synapse_query(
+        row = read_warehouse_query(
             spark, warehouse, q, workspace_id, warehouse_id
         ).collect()[0]
 
@@ -349,7 +349,7 @@ def _estimate_column_cardinality_spark(
 ) -> Tuple[int, int, float]:
     """Fallback: estimate cardinality by reading through the Spark connector."""
     try:
-        df = read_synapse_table(
+        df = read_warehouse_table(
             spark, warehouse, schema_name, table_name,
             workspace_id, warehouse_id,
         )
@@ -411,7 +411,7 @@ def estimate_batch_column_cardinality(
             f"SELECT {select_clause}\n"
             f"FROM [{schema_name}].[{table_name}]"
         )
-        row = read_synapse_query(
+        row = read_warehouse_query(
             spark, warehouse, q, workspace_id, warehouse_id
         ).collect()[0]
 
@@ -448,7 +448,7 @@ def _estimate_batch_cardinality_spark(
     if not column_names:
         return {}
     try:
-        df = read_synapse_table(
+        df = read_warehouse_table(
             spark, warehouse, schema_name, table_name,
             workspace_id, warehouse_id,
         )
