@@ -55,7 +55,7 @@ result.save("/lakehouse/default/Files/reports/report.md", "md")       # Markdown
 result.save("/lakehouse/default/Files/reports/report.txt", "txt")     # Plain text
 
 # Via standalone function
-from fabric_data_clustering_advisor import save_report
+from fabric_warehouse_data_clustering_advisor import save_report
 
 save_report(result.html_report, "/path/to/report.html", format="html")
 save_report(result.markdown_report, "/path/to/report.md", format="md")

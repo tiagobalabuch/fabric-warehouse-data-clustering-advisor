@@ -14,7 +14,7 @@ where your Fabric Spark notebook is running. To target a warehouse in a
 ## Configuration
 
 ```python
-from fabric_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
 config = DataClusteringAdvisorConfig(
     warehouse_name="TargetWarehouse",

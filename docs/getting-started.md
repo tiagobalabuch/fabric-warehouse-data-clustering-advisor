@@ -34,8 +34,8 @@ python -m build
 
 This produces two files in `dist/`:
 
-- `fabric_data_clustering_advisor-0.2.0-py3-none-any.whl` — the installable wheel
-- `fabric_data_clustering_advisor-0.2.0.tar.gz` — source distribution
+- `fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl` — the installable wheel
+- `fabric_warehouse_data_clustering_advisor-0.3.0.tar.gz` — source distribution
 
 You only need the `.whl` file for Fabric.
 
@@ -47,7 +47,7 @@ You only need the `.whl` file for Fabric.
 2. In the first cell of your notebook, run:
 
 ```python
-%pip install /lakehouse/default/Files/fabric_data_clustering_advisor-0.2.0-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
 ```
 
 ### Option B: Fabric Environment (Recommended)
@@ -63,7 +63,7 @@ uses the Environment — no `%pip install` needed.
 ## Quick Start
 
 ```python
-from fabric_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
 # Minimal configuration — only warehouse_name is required
 config = DataClusteringAdvisorConfig(

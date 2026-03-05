@@ -5,7 +5,7 @@ Create an instance, override the defaults you need, and pass it to
 `DataClusteringAdvisor`.
 
 ```python
-from fabric_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
 config = DataClusteringAdvisorConfig(
     warehouse_name="MyWarehouse",

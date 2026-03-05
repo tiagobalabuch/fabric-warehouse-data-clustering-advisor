@@ -5,7 +5,7 @@ Data Clustering Advisor.
 
 ## Installation Issues
 
-### `ModuleNotFoundError: No module named 'fabric_data_clustering_advisor'`
+### `ModuleNotFoundError: No module named 'fabric_warehouse_data_clustering_advisor'`
 
 **Cause:** The wheel is not installed in the current Spark session.
 
@@ -13,7 +13,7 @@ Data Clustering Advisor.
 
 ```python
 # Option A: install from Lakehouse Files
-%pip install /lakehouse/default/Files/fabric_data_clustering_advisor-0.2.0-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
 
 # Option B: attach a Fabric Environment with the wheel pre-installed
 ```

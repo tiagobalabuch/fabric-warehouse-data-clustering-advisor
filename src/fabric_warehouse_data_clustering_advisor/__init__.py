@@ -6,7 +6,7 @@ should use **Data Clustering** in Microsoft Fabric Warehouse.
 
 Quick start::
 
-    from fabric_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+    from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
     config = DataClusteringAdvisorConfig(warehouse_name="MyWarehouse")
     advisor = DataClusteringAdvisor(spark, config)
