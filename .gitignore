@@ -7,6 +7,7 @@ __pycache__/
 # ----------  Build / Distribution  ----------
 build/
 dist/
+site/
 *.egg-info/
 *.egg
 *.whl
