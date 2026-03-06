@@ -15,7 +15,7 @@ Everything runs inside a single Fabric Spark notebook session.
 │    ├── Phase 1: Metadata        ──► sys.tables/columns/types    │
 │    ├── Phase 2: Clustering      ──► sys.indexes/index_columns   │
 │    ├── Phase 3: Row Counts      ──► COUNT_BIG(*) per table      │
-│    ├── Phase 4: Query Patterns  ──► queryinsights.*              │
+│    ├── Phase 4: Query Patterns  ──► queryinsights.*             │
 │    ├── Phase 5: Predicates      ──► regex parser                │
 │    ├── Phase 6: Cardinality     ──► APPROX_COUNT_DISTINCT       │
 │    └── Phase 7: Scoring         ──► composite score + reports   │
