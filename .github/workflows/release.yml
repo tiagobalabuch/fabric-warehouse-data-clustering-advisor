@@ -100,7 +100,7 @@ jobs:
           git add CHANGELOG.md
           git diff --cached --quiet && echo "No changes to commit" && exit 0
           git commit -m "Update CHANGELOG.md for ${{ github.ref_name }}"
-          git push origin "$BRANCH"
+          git push --force origin "$BRANCH"
           gh pr create \
             --title "Update CHANGELOG.md for ${{ github.ref_name }}" \
             --body "Automated changelog update for release ${{ github.ref_name }}." \
