@@ -2,26 +2,27 @@
 
 The advisor runs a **7-phase pipeline** that collects metadata, analyses
 query patterns, estimates cardinality, and produces scored recommendations.
-Everything runs inside a single Fabric Spark notebook session.
+Everything runs inside a single Fabric notebook session.
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Fabric Spark Notebook                        │
-│                                                                 │
-│  DataClusteringAdvisor.run()                                    │
-│    │                                                            │
-│    ├── Phase 1: Metadata        ──► sys.tables/columns/types    │
-│    ├── Phase 2: Clustering      ──► sys.indexes/index_columns   │
-│    ├── Phase 3: Row Counts      ──► COUNT_BIG(*) per table      │
-│    ├── Phase 4: Query Patterns  ──► queryinsights.*             │
-│    ├── Phase 5: Predicates      ──► regex parser                │
-│    ├── Phase 6: Cardinality     ──► APPROX_COUNT_DISTINCT       │
-│    └── Phase 7: Scoring         ──► composite score + reports   │
-│                                                                 │
-│  All SQL runs via T-SQL passthrough (no data transfer to Spark) │
-└─────────────────────────────────────────────────────────────────┘
+```text
+┌───────────────────────────────────────────────────────────────┐
+│                     Fabric Notebook                           │
+│                                                               │
+│  DataClusteringAdvisor.run()                                  │
+│  │                                                            │
+│  ├─ Phase 1: Metadata        → sys.tables/columns/types       │
+│  ├─ Phase 2: Clustering      → sys.indexes/index_columns      │
+│  ├─ Phase 3: Row Counts      → COUNT_BIG(*) per table         │
+│  ├─ Phase 4: Query Patterns  → queryinsights.*                │
+│  ├─ Phase 5: Predicates      → regex parser                   │
+│  ├─ Phase 6: Cardinality     → APPROX_COUNT_DISTINCT          │
+│  └─ Phase 7: Scoring         → composite score + reports      │
+│                                                               │
+│  All SQL runs via T-SQL passthrough (no data transfer to      │
+│  Spark)                                                       │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## Phase 1: Metadata Collection
@@ -64,9 +65,8 @@ Counts rows per table using T-SQL passthrough:
 SELECT COUNT_BIG(*) AS cnt FROM [schema].[table]
 ```
 
-This runs **inside the SQL engine** — Fabric Warehouse resolves
-`COUNT_BIG(*)` from columnstore metadata, so it completes almost
-instantly even on billion-row tables. No data is transferred to Spark.
+This runs **inside the SQL engine** — one query per table. No user data
+is transferred to Spark, only the resulting count (~KB per table).
 
 Tables below `min_row_count` are excluded from further analysis.
 
@@ -95,7 +95,7 @@ identify which columns appear in predicates.
 The parser:
 
 1. Extracts `WHERE` clauses (everything between `WHERE` and
-   `ORDER BY`/`GROUP BY`/`HAVING`/`UNION`/`;`/end-of-string)
+   `ORDER BY`/`GROUP BY`/`HAVING`/`UNION`/`;`/`end of the query text`)
 2. Finds identifiers in the clause text
 3. Matches them against known columns from Phase 1
 4. Detects comparison operators (`=`, `>`, `<`, `BETWEEN`, `IN`, `LIKE`, etc.)
@@ -121,7 +121,7 @@ SELECT COUNT_BIG(*) AS total,
 FROM [schema].[table]
 ```
 
-`APPROX_COUNT_DISTINCT` runs server-side using HyperLogLog — it's
+`APPROX_COUNT_DISTINCT` runs inside the SQL engine using HyperLogLog — it's
 fast and accurate enough for classification without transferring any
 data to Spark.
 
@@ -150,7 +150,7 @@ This phase produces:
 
 ## Data Flow
 
-```
+```text
 Phase 1 (metadata) ──────────────┐
 Phase 2 (clustering) ────────────┤
 Phase 3 (row counts) ────────────┼──► Phase 7 (scoring)
@@ -171,12 +171,17 @@ Phase 6 (cardinality) ───────────┘        ▼
 |-------|--------|---------------|-------|
 | 1. Metadata | T-SQL passthrough | Metadata only (~KB) | Instant |
 | 2. Clustering | T-SQL passthrough | Metadata only (~KB) | Instant |
-| 3. Row Counts | T-SQL `COUNT_BIG(*)` | None (resolved from metadata) | Instant |
+| 3. Row Counts | T-SQL `COUNT_BIG(*)` | Count per table (~KB) | Fast |
 | 4. Query Patterns | T-SQL passthrough | Query text only (~KB-MB) | Fast |
 | 5. Predicates | Local regex | None (in-memory) | Instant |
 | 6. Cardinality | T-SQL `APPROX_COUNT_DISTINCT` | None (computed server-side) | Fast |
 | 7. Scoring | Local computation | None (in-memory) | Instant |
 
-The entire pipeline typically completes in **under 2 minutes** even for
-warehouses with hundreds of tables, because no user data is ever
-transferred to Spark.
+No user data is ever transferred to Spark — only metadata, counts, and
+aggregates.
+
+Overall execution time depends primarily on the **number of tables** and
+the **number of columns per table**, since Phases 3 and 6 issue one or
+more T-SQL queries per table. Warehouses with a small number of tables
+will complete in seconds; larger environments with hundreds of tables and
+many columns will take longer, particularly during cardinality estimation.

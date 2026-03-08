@@ -83,19 +83,22 @@ All three formats include the following sections:
 
 ### Per-Table Recommendations
 
-For each table:
+For each table the report includes:
+
 - Table name, schema, and row count
 - Current `CLUSTER BY` columns (if any)
 - Warnings for sub-optimal existing clustering
-- Column-level detail table:
-  - Column name and data type
-  - Predicate hits (weighted by query runs)
-  - Approximate distinct count, cardinality ratio, and percentage
-  - Cardinality classification (High/Medium/Low)
-  - Composite score (with visual bar in HTML)
-  - Recommendation label
-  - Optimization warnings (if applicable)
 - Suggested CTAS DDL (when `generate_ctas=True`)
+
+Each table also contains a column-level detail table with:
+
+- Column name and data type
+- Predicate hits (weighted by query runs)
+- Approximate distinct count, cardinality ratio, and percentage
+- Cardinality classification (High/Medium/Low)
+- Composite score (with visual bar in HTML)
+- Recommendation label
+- Optimization warnings (if applicable)
 
 ### All Suggested DDL
 
@@ -105,6 +108,7 @@ plus an explanatory note about how Fabric applies data clustering.
 ### Best Practices
 
 A reference section with key recommendations:
+
 - Data clustering is most effective on large tables
 - Choose mid-to-high cardinality columns used in WHERE filters
 - Batch ingestion (≥ 1M rows per DML) for optimal quality
