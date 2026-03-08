@@ -1,69 +1,45 @@
 # Fabric Warehouse Data Clustering Advisor
 
-A PySpark **library** (installable wheel) that assesses and recommends which
-tables and columns should use **Data Clustering** in Microsoft Fabric Warehouse.
+Welcome! This project helps you answer a deceptively simple question:
+**which columns in my Fabric Warehouse should I cluster?**
 
-It runs entirely inside a **Fabric Spark notebook** — the Microsoft Fabric Data Warehouse
-comes pre-installed in the Fabric runtime, Query Insights is enabled by default
-on every warehouse, and no Lakehouse or data source attachment is required.
+Data Clustering is one of the most impactful performance levers in
+Microsoft Fabric Warehouse — it controls how data is physically organized
+on disk, which directly affects query speed and resource consumption.
+But choosing the *right* columns to cluster on isn't always obvious.
+That's where this advisor comes in.
 
-## Installation
+## What does it do?
 
-### Option A: Download Pre-Built Wheel (Recommended)
+The **Fabric Warehouse Data Clustering Advisor** is a PySpark library that
+automatically analyses your warehouse and produces actionable, scored
+recommendations for Data Clustering — no guesswork required.
 
-Download the latest `.whl` file from
-[**GitHub Releases**](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/latest),
-then install it in your Fabric notebook:
+It looks at your **actual query patterns** (via Query Insights), combines
+them with **table metadata** and **column cardinality estimates**, and
+scores every candidate column from 0 to 100. You get a clear report
+telling you exactly what to cluster and why.
 
-```python
-%pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
-```
+Everything runs inside a **Fabric Spark notebook** — no external tools,
+no Lakehouse attachment, and no data leaves your environment.
 
-### Option B: Build from Source
+## Why use it?
 
-```bash
-pip install build
-python -m build          # produces dist/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
-```
+- **Data-driven decisions** — recommendations are based on your real
+  workload, not rules of thumb
+- **Zero setup** — Query Insights is enabled by default on every Fabric
+  Warehouse; just install the library and run
+- **Non-invasive** — read-only analysis via T-SQL passthrough; nothing is
+  modified in your warehouse
+- **Rich output** — interactive HTML reports, Markdown, plain text, and a
+  Spark DataFrame you can persist to Delta for tracking over time
+- **Cross-workspace support** — analyse warehouses in other Fabric
+  workspaces from a single notebook
 
-### Install in Fabric
+## Get Started
 
-Upload the `.whl` file to your Lakehouse **Files** area and use `%pip install`,
-or attach it via a Fabric **Environment** resource so it's pre-installed on
-every Spark session.
-
-See [Getting Started](getting-started.md) for detailed instructions.
-
-## Quick Start
-
-```python
-from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
-
-config = DataClusteringAdvisorConfig(
-    warehouse_name="MyWarehouse",
-)
-
-advisor = DataClusteringAdvisor(spark, config)
-result = advisor.run()
-
-# Rich HTML report — best way to view results in a Fabric notebook
-displayHTML(result.html_report)
-```
-
-## How It Works
-
-The advisor runs **7 phases** — all using T-SQL passthrough (no data
-transferred to Spark):
-
-| Phase | What it does |
-|-------|-------------|
-| 1. **Metadata** | Reads `sys.tables`, `sys.columns`, `sys.types` |
-| 2. **Clustering** | Reads `sys.indexes` / `sys.index_columns` for current `CLUSTER BY` |
-| 3. **Row Counts** | `COUNT_BIG(*)` per table; filters small tables |
-| 4. **Query Patterns** | Reads `queryinsights.frequently_run_queries` |
-| 5. **Predicates** | Regex extraction of WHERE-clause columns |
-| 6. **Cardinality** | `APPROX_COUNT_DISTINCT()` pushed down to SQL engine |
-| 7. **Scoring** | 0–100 composite score with cardinality penalties |
+Ready to try it? Head over to [Getting Started](getting-started.md) for
+installation instructions and a quick-start example.
 
 ## Documentation
 
@@ -77,20 +53,6 @@ transferred to Spark):
 | [Cross-Workspace](cross-workspace.md) | Analysing warehouses in other workspaces |
 | [Data Type Reference](data-type-reference.md) | Supported types and limitations |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions |
-
-## Package Structure
-
-```
-src/fabric_warehouse_data_clustering_advisor/
-├── __init__.py            # Public API exports
-├── config.py              # DataClusteringAdvisorConfig dataclass
-├── advisor.py             # DataClusteringAdvisor orchestrator class
-├── data_type_support.py   # Data-type eligibility rules
-├── warehouse_reader.py    # Spark connector wrappers for sys views
-├── predicate_parser.py    # SQL text → predicate column extraction
-├── scoring.py             # Composite scoring + DDL generation
-└── report.py              # Text, Markdown & HTML report generators
-```
 
 ## License
 

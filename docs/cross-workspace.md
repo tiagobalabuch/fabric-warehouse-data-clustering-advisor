@@ -6,10 +6,17 @@ where your Fabric Spark notebook is running. To target a warehouse in a
 
 ## Required Parameters
 
+Both IDs are GUIDs that you can find directly in the browser URL when
+viewing the item. The URL format is:
+
+```
+https://app.fabric.microsoft.com/groups/{WorkspaceID}/warehouses/{WarehouseID}
+```
+
 | Parameter | Where to Find |
 |-----------|---------------|
-| `workspace_id` | Settings → About this workspace → Workspace ID (a GUID) |
-| `warehouse_id` | Open the Warehouse → Settings → About → Item ID (a GUID) |
+| `workspace_id` | The GUID after `/groups/` in the URL when you are in the workspace |
+| `warehouse_id` | The GUID after `/warehouses/` in the URL when the warehouse is open |
 
 ## Configuration
 
