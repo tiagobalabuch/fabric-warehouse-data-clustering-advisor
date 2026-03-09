@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - Scoring & Recommendation Engine
+Fabric Warehouse Advisor — Data Clustering Scoring & Recommendation Engine
 =================================================================
 Combines all signals (table size, predicate frequency, cardinality,
 data-type support) into a composite score and produces ranked
@@ -368,7 +368,7 @@ def build_table_recommendations(
         if generate_ctas:
             for c in candidates:
                 ddl_parts.append(
-                    f"CREATE TABLE [{schema}].[{table}_clustered]\n"
+                    f"CREATE TABLE [{schema}].[{table}_clustering_{c.column_name}]\n"
                     f"WITH (CLUSTER BY ([{c.column_name}]))\n"
                     f"AS SELECT * FROM [{schema}].[{table}];"
                 )

@@ -1,11 +1,11 @@
 # Troubleshooting
 
-Common issues and their solutions when running the Fabric Warehouse
-Data Clustering Advisor.
+Common issues and their solutions when running advisors from the
+Fabric Warehouse Advisor framework.
 
 ## Installation Issues
 
-### `ModuleNotFoundError: No module named 'fabric_warehouse_data_clustering_advisor'`
+### `ModuleNotFoundError: No module named 'fabric_warehouse_advisor'`
 
 **Cause:** The wheel is not installed in the current Spark session.
 
@@ -13,7 +13,7 @@ Data Clustering Advisor.
 
 ```python
 # Option A: install from Lakehouse Files
-%pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_advisor-0.4.0-py3-none-any.whl
 
 # Option B: attach a Fabric Environment with the wheel pre-installed
 ```
@@ -170,3 +170,82 @@ If you encounter an issue not covered here:
 2. Check `[WARN]` messages — they often explain what went wrong
 3. Open an issue on the GitHub repository with the verbose output
    (redacting any sensitive table/column names)
+
+---
+
+## Performance Check — Specific Issues
+
+### Edition Detection Fails
+
+**Cause:** `DATABASEPROPERTYEX(DB_NAME(), 'Edition')` returned an
+unexpected value or threw an error.
+
+**Impact:** The advisor defaults the edition to `"Unknown"` and some
+checks (V-Order) may be skipped.
+
+**Solution:** Ensure the Spark session has access to the connected
+warehouse. This usually means running in a Fabric notebook with the
+correct identity.
+
+### Query Insights Not Populated (Caching Check)
+
+**Cause:** The caching cold-start analysis queries
+`queryinsights.exec_requests_history`, which may be empty if:
+
+- No queries have been executed against the warehouse recently.
+- Query Insights has not had time to populate (wait a few minutes).
+- The connected item is a Lakehouse SQL Analytics Endpoint (Query
+  Insights may not be available).
+
+**Solution:**
+
+1. Run some representative queries against the warehouse.
+2. Wait a few minutes for Query Insights to flush.
+3. Re-run the Performance Check advisor.
+
+The advisor will report a `no_query_history` INFO finding if the
+history is empty — this is informational, not an error.
+
+### DBCC SHOW_STATISTICS Access Denied
+
+**Cause:** The row-drift check uses `DBCC SHOW_STATISTICS` to read the
+stats header. Some Fabric SKUs or permission levels may restrict this.
+
+**Impact:** The row-drift sub-check is silently skipped for the affected
+table. All other statistics checks continue normally.
+
+**Solution:** Grant the notebook identity `VIEW DATABASE STATE`
+permission, or accept that row-drift will not be reported.
+
+### V-Order Flagged as CRITICAL
+
+**Cause:** V-Order is disabled on the warehouse. This is flagged as
+CRITICAL because disabling V-Order is **irreversible**.
+
+**Solution:**
+
+- If this is a **staging warehouse** (ETL ingestion only, no reporting),
+  this is acceptable. The common pattern is: staging warehouse with
+  V-Order OFF → reporting warehouse with V-Order ON.
+- If this is a **reporting warehouse**, there is no SQL fix. You must
+  create a new warehouse and reload data.
+
+To suppress this finding when V-Order being off is intentional:
+
+```python
+config = PerformanceCheckConfig(
+    warehouse_name="StagingWarehouse",
+    vorder_warn_if_disabled=False,
+)
+```
+
+### Proactive Stats Refresh Check Fails
+
+**Cause:** The `is_proactive_statistics_refresh_on` column may not exist
+on all Fabric SKUs.
+
+**Impact:** A `proactive_refresh_check_failed` INFO finding is reported.
+All other statistics checks run normally.
+
+**Solution:** This is informational — no action required. The feature
+may become available as Fabric evolves.

@@ -49,17 +49,17 @@ jobs:
             Download the `.whl` file below and install it in your Fabric Spark notebook:
 
             ```python
-            %pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
+            %pip install /lakehouse/default/Files/fabric_warehouse_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
             ```
 
             Or install directly from the URL (if your environment has internet access):
 
             ```python
-            %pip install https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.VERSION }}/fabric_warehouse_data_clustering_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
+            %pip install https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.VERSION }}/fabric_warehouse_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
             ```
           files: |
-            dist/fabric_warehouse_data_clustering_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
-            dist/fabric_warehouse_data_clustering_advisor-${{ steps.version.outputs.VERSION }}.tar.gz
+            dist/fabric_warehouse_advisor-${{ steps.version.outputs.VERSION }}-py3-none-any.whl
+            dist/fabric_warehouse_advisor-${{ steps.version.outputs.VERSION }}.tar.gz
           draft: false
           prerelease: false
 

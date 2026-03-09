@@ -1,14 +1,14 @@
 # Getting Started
 
-This guide walks you through installing and running the
-**Fabric Warehouse Data Clustering Advisor** for the first time.
+This guide walks you through installing the **Fabric Warehouse Advisor**
+and running your first analysis.
 
 ## Prerequisites
 
 | Requirement | Notes |
 |-------------|-------|
-| **Microsoft Fabric Workspace** | With at least one Fabric Warehouse |
-| **Fabric Notebook** | The advisor runs inside a notebook |
+| **Microsoft Fabric Workspace** | With at least one Fabric Warehouse or Lakehouse SQL Endpoint |
+| **Fabric Notebook** | The advisors run inside a Fabric Spark notebook |
 | **Warehouse access** | The identity running the notebook (your Entra ID / service principal) must have at least **Read access** on the target warehouse |
 | **Same tenant** | The target warehouse must be in the same Fabric tenant |
 | **Python 3.9+** | Only needed if building from source (not required on Fabric) |
@@ -23,7 +23,7 @@ This guide walks you through installing and running the
 ### Option A: Download Pre-Built (Recommended)
 
 Download the latest `.whl` file from the
-[GitHub Releases](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/latest)
+[GitHub Releases](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/latest)
 page — no build tools required.
 
 ### Option B: Build from Source
@@ -37,8 +37,8 @@ python -m build
 
 This produces two files in `dist/`:
 
-- `fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl` — the installable wheel
-- `fabric_warehouse_data_clustering_advisor-0.3.0.tar.gz` — source distribution
+- `fabric_warehouse_advisor-0.4.0-py3-none-any.whl` — the installable wheel
+- `fabric_warehouse_advisor-0.4.0.tar.gz` — source distribution
 
 You only need the `.whl` file for Fabric.
 
@@ -50,7 +50,7 @@ You only need the `.whl` file for Fabric.
 2. In the first cell of your notebook, run:
 
 ```python
-%pip install /lakehouse/default/Files/fabric_warehouse_data_clustering_advisor-0.3.0-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_advisor-0.4.0-py3-none-any.whl
 ```
 
 This is the quickest way to get up and running.
@@ -67,12 +67,15 @@ For a more permanent setup, you can attach the library to a Fabric Environment:
 With this approach the library is pre-installed on every session that uses
 the Environment — no `%pip install` needed.
 
-## Running the Advisor
+## Running an Advisor
 
-Once installed, you only need three lines to analyse a warehouse:
+### Data Clustering Advisor
+
+Analyses your warehouse and recommends which tables and columns should
+use `CLUSTER BY`:
 
 ```python
-from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
 config = DataClusteringAdvisorConfig(
     warehouse_name="MyWarehouse",
@@ -82,64 +85,90 @@ advisor = DataClusteringAdvisor(spark, config)
 result = advisor.run()
 ```
 
-The advisor will run a 7-phase pipeline (see [How It Works](how-it-works.md))
-and return an `AdvisorResult` object containing scores, recommendations, and
-ready-to-use reports.
+See the full [Data Clustering documentation](advisors/data-clustering/index.md)
+for configuration options, scoring details, and report formats.
+
+### Performance Check Advisor
+
+Detects performance anti-patterns across data types, caching, V-Order,
+and statistics:
+
+```python
+from fabric_warehouse_advisor import PerformanceCheckAdvisor, PerformanceCheckConfig
+
+config = PerformanceCheckConfig(
+    warehouse_name="MyWarehouse",
+)
+
+advisor = PerformanceCheckAdvisor(spark, config)
+result = advisor.run()
+```
+
+See the full [Performance Check documentation](advisors/performance-check/index.md)
+for configuration options, check categories, and report formats.
 
 ## Working with Results
+
+Both advisors return a result object with pre-formatted reports in three
+formats.
 
 ### Viewing Reports
 
 ```python
-# The text report is auto-printed during run().
-# You can also display the rich HTML report:
+# Rich HTML report (recommended in Fabric notebooks)
 displayHTML(result.html_report)
 
-# Or print the text version again:
+# Plain text
 print(result.text_report)
-```
 
-### Exploring Scores
-
-```python
-# Spark DataFrame with per-column scores
-result.scores_df.show()
+# Markdown
+print(result.markdown_report)
 ```
 
 ### Saving Reports
 
 ```python
 # Save as HTML (default)
-result.save("/lakehouse/default/Files/reports/advisor_report.html")
+result.save("/lakehouse/default/Files/reports/report.html")
 
 # Save as Markdown
-result.save("/lakehouse/default/Files/reports/advisor_report.md", "md")
+result.save("/lakehouse/default/Files/reports/report.md", "md")
 
 # Save as plain text
-result.save("/lakehouse/default/Files/reports/advisor_report.txt", "txt")
+result.save("/lakehouse/default/Files/reports/report.txt", "txt")
 ```
 
-### Persisting Scores to Delta
+### Data Clustering — Exploring Scores
+
+The Data Clustering advisor also provides a Spark DataFrame:
 
 ```python
+result.scores_df.show()
+
+# Persist to Delta for tracking over time
 result.scores_df.write.mode("overwrite").format("delta").saveAsTable(
     "yourschema.clustering_advisor_scores"
 )
 ```
 
-### Programmatic Access
+### Performance Check — Exploring Findings
+
+The Performance Check advisor provides structured findings:
 
 ```python
-for rec in result.recommendations:
-    print(f"{rec.schema_name}.{rec.table_name}: {rec.cluster_by_ddl}")
-    for col in rec.recommended_columns:
-        print(f"  {col.column_name} — score {col.composite_score}, {col.recommendation}")
+# Summary counts
+print(f"Critical: {result.critical_count}")
+print(f"Warning:  {result.warning_count}")
+print(f"Info:     {result.info_count}")
+
+# Iterate findings
+for f in result.findings:
+    print(f"[{f.level}] {f.object_name}: {f.message}")
 ```
 
 ## Next Steps
 
-- [Configuration](configuration.md) — tune every parameter
-- [How It Works](how-it-works.md) — understand the 7-phase pipeline
-- [Scoring](scoring.md) — learn how scores are calculated
+- [Data Clustering Advisor](advisors/data-clustering/index.md) — full documentation
+- [Performance Check Advisor](advisors/performance-check/index.md) — full documentation
 - [Cross-Workspace](cross-workspace.md) — analyse warehouses in other workspaces
-- [Reports](reports.md) — text, Markdown, and HTML output formats
+- [Troubleshooting](troubleshooting.md) — common issues and solutions

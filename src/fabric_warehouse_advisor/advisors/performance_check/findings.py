@@ -1,0 +1,108 @@
+"""
+Fabric Warehouse Advisor — Performance Check Findings
+======================================================
+Structured output model for all performance checks.
+
+Each check produces zero or more :class:`Finding` instances.  The
+advisor collects them into a flat list that the report layer can
+group, sort, and render in any format.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import List
+
+
+# Severity levels (ordered by impact)
+LEVEL_INFO = "INFO"
+LEVEL_WARNING = "WARNING"
+LEVEL_CRITICAL = "CRITICAL"
+
+# Check categories
+CATEGORY_WAREHOUSE_TYPE = "warehouse_type"
+CATEGORY_DATA_TYPES = "data_types"
+CATEGORY_CACHING = "caching"
+CATEGORY_STATISTICS = "statistics"
+CATEGORY_VORDER = "vorder"
+CATEGORY_COLLATION = "collation"
+
+
+@dataclass
+class Finding:
+    """Single finding produced by a performance check.
+
+    Parameters
+    ----------
+    level : str
+        Severity: ``"INFO"``, ``"WARNING"``, or ``"CRITICAL"``.
+    category : str
+        Check category (e.g. ``"data_types"``, ``"caching"``).
+    check_name : str
+        Machine-readable identifier such as ``"varchar_max_detected"``.
+    object_name : str
+        Fully-qualified object the finding applies to, e.g.
+        ``"dbo.FactSales.Description"`` or the database name.
+    message : str
+        Human-readable one-line summary.
+    detail : str
+        Additional context (current value, comparison, etc.).
+    recommendation : str
+        Actionable guidance to resolve the finding.
+    sql_fix : str
+        Optional T-SQL statement that addresses the issue.
+    """
+
+    level: str
+    category: str
+    check_name: str
+    object_name: str
+    message: str
+    detail: str = ""
+    recommendation: str = ""
+    sql_fix: str = ""
+
+    @property
+    def is_critical(self) -> bool:
+        return self.level == LEVEL_CRITICAL
+
+    @property
+    def is_warning(self) -> bool:
+        return self.level == LEVEL_WARNING
+
+    @property
+    def is_info(self) -> bool:
+        return self.level == LEVEL_INFO
+
+
+@dataclass
+class CheckSummary:
+    """Aggregated summary across all findings from a single advisor run."""
+
+    warehouse_name: str = ""
+    warehouse_edition: str = ""  # "DataWarehouse" or "LakeWarehouse"
+    total_tables_analyzed: int = 0
+    total_columns_analyzed: int = 0
+    findings: List[Finding] = field(default_factory=list)
+
+    @property
+    def critical_count(self) -> int:
+        return sum(1 for f in self.findings if f.is_critical)
+
+    @property
+    def warning_count(self) -> int:
+        return sum(1 for f in self.findings if f.is_warning)
+
+    @property
+    def info_count(self) -> int:
+        return sum(1 for f in self.findings if f.is_info)
+
+    @property
+    def has_critical(self) -> bool:
+        return self.critical_count > 0
+
+    def findings_by_category(self, category: str) -> List[Finding]:
+        return [f for f in self.findings if f.category == category]
+
+    def findings_by_level(self, level: str) -> List[Finding]:
+        return [f for f in self.findings if f.level == level]

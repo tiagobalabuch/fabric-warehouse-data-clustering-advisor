@@ -1,6 +1,6 @@
 """
-Fabric Warehouse Data Clustering Advisor - Main Orchestrator
-=============================================================
+Fabric Warehouse Advisor — Data Clustering Advisor (Main Orchestrator)
+======================================================================
 Provides the :class:`DataClusteringAdvisor` class that encapsulates the
 full 7-phase analysis pipeline.  Designed to run in **Microsoft Fabric
 Spark** (PySpark) notebooks.
@@ -9,7 +9,7 @@ Usage
 -----
 ::
 
-    from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+    from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
     config = DataClusteringAdvisorConfig(warehouse_name="MyWarehouse")
     advisor = DataClusteringAdvisor(spark, config)
@@ -31,7 +31,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from .config import DataClusteringAdvisorConfig
-from .warehouse_reader import (
+from ...core.warehouse_reader import (
     get_full_column_metadata,
     get_current_clustering_config,
     get_table_row_counts,
@@ -39,7 +39,7 @@ from .warehouse_reader import (
     estimate_column_cardinality,
     estimate_batch_column_cardinality,
 )
-from .predicate_parser import (
+from ...core.predicate_parser import (
     extract_predicates_regex,
     aggregate_predicate_hits,
     QueryPredicateSummary,
@@ -55,8 +55,8 @@ from .report import (
     generate_text_report,
     generate_markdown_report,
     generate_html_report,
-    save_report,
 )
+from ...core.report import save_report
 
 
 # ------------------------------------------------------------------
@@ -223,11 +223,13 @@ class DataClusteringAdvisor:
         cfg.validate()
         spark = self.spark
 
-        print(f"Fabric Warehouse Data Clustering Advisor")
-        print(f"Warehouse : {cfg.warehouse_name}")
+        print("╔══════════════════════════════════════════════════╗")
+        print("║  Fabric Warehouse Data Clustering Advisor        ║")
+        print("╚══════════════════════════════════════════════════╝")
+        print(f"  Warehouse : {cfg.warehouse_name}")
         if cfg.workspace_id:
-            print(f"Workspace : {cfg.workspace_id} (cross-workspace)")
-        print(f"Timestamp : {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+            print(f"  Workspace : {cfg.workspace_id} (cross-workspace)")
+        print(f"  Timestamp : {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
         print()
 
         _run_start = time.perf_counter()
@@ -246,7 +248,7 @@ class DataClusteringAdvisor:
             _filter_set = self._parse_table_names(cfg.table_names)
             _table_filter = self._table_filter_condition(_filter_set)
             full_metadata = full_metadata.filter(_table_filter)
-            print(f"  Filtered to {len(cfg.table_names)} specified table(s).")
+            self._log(f"  Filtered to {len(cfg.table_names)} specified table(s).")
 
         if cfg.verbose:
             self._log_header("Metadata Overview")
@@ -263,7 +265,10 @@ class DataClusteringAdvisor:
             self._log_footer()
         full_metadata.cache()
         _phase_timings["Phase 1: Metadata"] = time.perf_counter() - _phase_start
-        print(f"  ⏱ Phase 1 completed in {_phase_timings['Phase 1: Metadata']:.2f}s")
+        self._log(f"  \u23f1 Phase 1 completed in {_phase_timings['Phase 1: Metadata']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 2: Current clustering ----
         _t0 = time.perf_counter()
@@ -281,7 +286,7 @@ class DataClusteringAdvisor:
             if num_clustered > 0:
                 _display(current_clustering)
             else:
-                print("    (No tables are currently using data clustering.)")
+                self._log("    (No tables are currently using data clustering.)")
             self._log_footer()
 
         # Emit warnings for potentially sub-optimal clustering choices
@@ -295,25 +300,25 @@ class DataClusteringAdvisor:
                 dt = (crow.data_type or "").strip().lower()
                 col_id = f"{tbl_id}.{crow.column_name}"
                 if dt in ("char", "varchar") and crow.max_length > 32:
-                    print(
+                    self._log(
                         f"  \u26a0 {col_id}: Warning: max_length="
                         f"{crow.max_length} > 32; only the first 32 "
                         f"characters are used for column statistics."
                     )
                 if dt in ("decimal", "numeric") and crow.precision > 18:
-                    print(
+                    self._log(
                         f"  \u26a0 {col_id}: Warning: precision="
                         f"{crow.precision} > 18; predicates won't push "
                         f"down to storage."
                     )
                 if dt in ("bit", "varbinary", "uniqueidentifier"):
-                    print(
+                    self._log(
                         f"  \u26a0 {col_id}: Warning: {dt} is not "
                         f"supported for data clustering."
                     )
             for tbl_id, cnt in _tbl_col_counts.items():
                 if cnt > cfg.max_clustering_columns:
-                    print(
+                    self._log(
                         f"  \u26a0 {tbl_id}: Warning: {cnt} clustered "
                         f"columns exceeds recommended max of "
                         f"{cfg.max_clustering_columns}."
@@ -321,7 +326,10 @@ class DataClusteringAdvisor:
 
         current_clustering.cache()
         _phase_timings["Phase 2: Current clustering"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 2 completed in {_phase_timings['Phase 2: Current clustering']:.2f}s")
+        self._log(f"  \u23f1 Phase 2 completed in {_phase_timings['Phase 2: Current clustering']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 3: Row counts ----
         _t0 = time.perf_counter()
@@ -329,6 +337,7 @@ class DataClusteringAdvisor:
         row_counts = get_table_row_counts(
             spark, cfg.warehouse_name, full_metadata, min_rows=cfg.min_row_count,
             workspace_id=cfg.workspace_id, warehouse_id=cfg.warehouse_id,
+            verbose=cfg.verbose,
         )
         if cfg.verbose:
             self._log_header("Row Counts")
@@ -337,13 +346,16 @@ class DataClusteringAdvisor:
             self._log_footer()
         row_counts.cache()
         _phase_timings["Phase 3: Row counts"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 3 completed in {_phase_timings['Phase 3: Row counts']:.2f}s")
+        self._log(f"  \u23f1 Phase 3 completed in {_phase_timings['Phase 3: Row counts']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 4: Query patterns ----
         _t0 = time.perf_counter()
         print("Phase 4: Analysing query patterns from Query Insights ...")
-        print("  (Including full-scan queries \u2014 data clustering is most effective")
-        print("   on large tables even when scanning the full dataset.)")
+        self._log("  (Including full-scan queries \u2014 data clustering is most effective")
+        self._log("   on large tables even when scanning the full dataset.)")
         freq_queries = get_frequently_run_queries(
             spark, cfg.warehouse_name, min_runs=cfg.min_query_runs,
             workspace_id=cfg.workspace_id, warehouse_id=cfg.warehouse_id,
@@ -390,26 +402,30 @@ class DataClusteringAdvisor:
                         key, 0
                     ) + num_runs
 
-        print(
+        self._log(
             f"  Frequently-run queries with WHERE that reference large tables: "
             f"{len(where_queries_rows)}"
         )
-        print(
+        self._log(
             f"  Frequently-run full-scan queries (no WHERE) on large tables: "
             f"{len(fullscan_queries_rows)}"
         )
+
         if full_scan_tables and cfg.verbose:
             self._log_header("Full-Scan Query Activity")
-            print(f"    {'Schema.Table':<40} {'Total Runs':>12}")
-            print(f"    {'─' * 40} {'─' * 12}")
+            self._log(f"    {'Schema.Table':<40} {'Total Runs':>12}")
+            self._log(f"    {'─' * 40} {'─' * 12}")
             for (sch, tbl), cnt in sorted(
                 full_scan_tables.items(), key=lambda x: -x[1]
             ):
-                print(f"    {sch}.{tbl:<38} {cnt:>12,}")
+                self._log(f"    {sch}.{tbl:<38} {cnt:>12,}")
             self._log_footer()
 
         _phase_timings["Phase 4: Query patterns"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 4 completed in {_phase_timings['Phase 4: Query patterns']:.2f}s")
+        self._log(f"  \u23f1 Phase 4 completed in {_phase_timings['Phase 4: Query patterns']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 5: Predicate columns ----
         _t0 = time.perf_counter()
@@ -444,20 +460,23 @@ class DataClusteringAdvisor:
                 self._log(f"    \u2514 query {qhash[:12]}... parsed in {_qt_elapsed:.3f}s")
 
         predicate_agg = aggregate_predicate_hits(summaries)
-        print(f"  Unique (table, column) predicate candidates: {len(predicate_agg)}")
+        self._log(f"  Unique (table, column) predicate candidates: {len(predicate_agg)}")
 
         if cfg.verbose and predicate_agg:
             self._log_header("Predicate Frequency (weighted by number_of_runs)")
-            print(f"    {'Schema.Table.Column':<50} {'Hits':>8}")
-            print(f"    {'─' * 50} {'─' * 8}")
+            self._log(f"    {'Schema.Table.Column':<50} {'Hits':>8}")
+            self._log(f"    {'─' * 50} {'─' * 8}")
             for (sch, tbl, col), hits in sorted(
                 predicate_agg.items(), key=lambda x: -x[1]
             ):
-                print(f"    {sch}.{tbl}.{col:<46} {hits:>8}")
+                self._log(f"    {sch}.{tbl}.{col:<46} {hits:>8}")
             self._log_footer()
 
         _phase_timings["Phase 5: Predicate columns"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 5 completed in {_phase_timings['Phase 5: Predicate columns']:.2f}s")
+        self._log(f"  \u23f1 Phase 5 completed in {_phase_timings['Phase 5: Predicate columns']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 6: Cardinality ----
         _t0 = time.perf_counter()
@@ -474,7 +493,7 @@ class DataClusteringAdvisor:
 
         for schema, table, col in candidate_cols:
             _cardinality_start = time.perf_counter()
-            print(f"  Estimating cardinality: {schema}.{table}.{col} ...")
+            self._log(f"  Estimating cardinality: {schema}.{table}.{col} ...")
             total, distinct, ratio = estimate_column_cardinality(
                 spark,
                 cfg.warehouse_name,
@@ -487,7 +506,7 @@ class DataClusteringAdvisor:
             )
             cardinality_cache[(schema, table, col)] = (total, distinct, ratio)
             _ct_elapsed = time.perf_counter() - _cardinality_start
-            print(f"    \u23f1 {schema}.{table}.{col} in {_ct_elapsed:.2f}s")
+            self._log(f"    \u23f1 {schema}.{table}.{col} in {_ct_elapsed:.2f}s")
             if cfg.verbose and total > 0:
                 pct = f"{ratio * 100:.2f}%" if ratio >= 0 else "N/A"
                 self._log(
@@ -520,7 +539,7 @@ class DataClusteringAdvisor:
 
             for (schema, table), cols in fs_cols_by_table.items():
                 _batch_start = time.perf_counter()
-                print(
+                self._log(
                     f"  Batch cardinality for full-scan table "
                     f"{schema}.{table} ({len(cols)} columns) ..."
                 )
@@ -545,10 +564,13 @@ class DataClusteringAdvisor:
                             f"distinct~={distinct:>12,}  ratio={ratio:.6f}  ({pct})"
                         )
                 _bt_elapsed = time.perf_counter() - _batch_start
-                print(f"    \u23f1 {schema}.{table} batch in {_bt_elapsed:.2f}s")
-        print(f"  Cardinality estimated for {len(cardinality_cache)} columns.")
+                self._log(f"    \u23f1 {schema}.{table} batch in {_bt_elapsed:.2f}s")
+        self._log(f"  Cardinality estimated for {len(cardinality_cache)} columns.")
         _phase_timings["Phase 6: Cardinality"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 6 completed in {_phase_timings['Phase 6: Cardinality']:.2f}s")
+        self._log(f"  \u23f1 Phase 6 completed in {_phase_timings['Phase 6: Cardinality']:.2f}s")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
 
         # ---- Phase 7: Scoring & recommendations ----
         _t0 = time.perf_counter()
@@ -582,8 +604,8 @@ class DataClusteringAdvisor:
             generate_ctas=cfg.generate_ctas,
         )
 
-        print(f"  Scored columns       : {len(all_scores)}")
-        print(f"  Tables with candidates: {len(table_recommendations)}")
+        self._log(f"  Scored columns       : {len(all_scores)}")
+        self._log(f"  Tables with candidates: {len(table_recommendations)}")
 
         # ---- Outputs ----
         scores_df = scores_to_dataframe(spark, all_scores)
@@ -598,46 +620,48 @@ class DataClusteringAdvisor:
             table_recommendations,
             min_score=cfg.min_recommendation_score,
             captured_at=captured_at,
+            warehouse_name=cfg.warehouse_name,
         )
-        print(text_report)
 
         markdown_report = generate_markdown_report(
             table_recommendations,
             min_score=cfg.min_recommendation_score,
             captured_at=captured_at,
+            warehouse_name=cfg.warehouse_name,
         )
 
         html_report = generate_html_report(
             table_recommendations,
             min_score=cfg.min_recommendation_score,
             captured_at=captured_at,
+            warehouse_name=cfg.warehouse_name,
         )
 
         _phase_timings["Phase 7: Scoring & reports"] = time.perf_counter() - _t0
-        print(f"  ⏱ Phase 7 completed in {_phase_timings['Phase 7: Scoring & reports']:.2f}s")
+        self._log(f"  ⏱ Phase 7 completed in {_phase_timings['Phase 7: Scoring & reports']:.2f}s")
 
         _total_elapsed = time.perf_counter() - _run_start
-
-        print("\n" + "═" * 60)
-        print("  ⏱ Timing Summary")
-        print("═" * 60)
-        phase_col_width = 35
-        elapsed_col_width = 8
-        pct_col_width = 7
-        for phase_name, elapsed in _phase_timings.items():
-            pct = (elapsed / _total_elapsed * 100) if _total_elapsed > 0 else 0
-            print(
-                f"  {phase_name:<{phase_col_width}} "
-                f"{elapsed:>{elapsed_col_width}.2f}s  ({pct:>5.1f}%)"
+        if cfg.verbose:
+            self._log("\n" + "═" * 60)
+            self._log("  ⏱ Timing Summary")
+            self._log("═" * 60)
+            phase_col_width = 35
+            elapsed_col_width = 8
+            pct_col_width = 7
+            for phase_name, elapsed in _phase_timings.items():
+                pct = (elapsed / _total_elapsed * 100) if _total_elapsed > 0 else 0
+                self._log(
+                    f"  {phase_name:<{phase_col_width}} "
+                    f"{elapsed:>{elapsed_col_width}.2f}s  ({pct:>5.1f}%)"
+                )
+            _separator = "─"
+            self._log(
+                f"  {_separator * phase_col_width} "
+                f"{_separator * elapsed_col_width}  "
+                f"{_separator * pct_col_width}"
             )
-        _separator = "─"
-        print(
-            f"  {_separator * phase_col_width} "
-            f"{_separator * elapsed_col_width}  "
-            f"{_separator * pct_col_width}"
-        )
-        print(f"  {'Total':<{phase_col_width}} {_total_elapsed:>{elapsed_col_width}.2f}s")
-        print("═" * 60)
+            self._log(f"  {'Total':<{phase_col_width}} {_total_elapsed:>{elapsed_col_width}.2f}s")
+            self._log("═" * 60)
 
         print("\n✓ Data Clustering Advisor completed successfully.")
         print("  Use  displayHTML(result.html_report)  for a rich HTML view.")

@@ -20,20 +20,41 @@ https://app.fabric.microsoft.com/groups/{WorkspaceID}/warehouses/{WarehouseID}
 
 ## Configuration
 
-```python
-from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+Both advisors accept the same cross-workspace parameters.
 
-config = DataClusteringAdvisorConfig(
-    warehouse_name="TargetWarehouse",
+=== "Data Clustering"
 
-    # Cross-workspace: both are required together
-    workspace_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    warehouse_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
-)
+    ```python
+    from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
-advisor = DataClusteringAdvisor(spark, config)
-result = advisor.run()
-```
+    config = DataClusteringAdvisorConfig(
+        warehouse_name="TargetWarehouse",
+
+        # Cross-workspace: both are required together
+        workspace_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        warehouse_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+    )
+
+    advisor = DataClusteringAdvisor(spark, config)
+    result = advisor.run()
+    ```
+
+=== "Performance Check"
+
+    ```python
+    from fabric_warehouse_advisor import PerformanceCheckAdvisor, PerformanceCheckConfig
+
+    config = PerformanceCheckConfig(
+        warehouse_name="TargetWarehouse",
+
+        # Cross-workspace: both are required together
+        workspace_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        warehouse_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+    )
+
+    advisor = PerformanceCheckAdvisor(spark, config)
+    result = advisor.run()
+    ```
 
 ## How It Works
 

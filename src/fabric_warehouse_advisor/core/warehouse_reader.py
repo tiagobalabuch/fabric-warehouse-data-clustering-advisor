@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - Warehouse Reader
+Fabric Warehouse Advisor — Core Warehouse Reader
 ===================================================
 Thin wrapper around the Fabric Spark Data Warehouse connector that
 reads system-catalog views and user tables into PySpark DataFrames.
@@ -46,6 +46,7 @@ def read_warehouse_query(
     query: str,
     workspace_id: str = "",
     warehouse_id: str = "",
+    max_retries: int = 5,
 ) -> DataFrame:
     """Execute a T-SQL query against the Fabric Warehouse via the Spark
     connector's query-passthrough mode.
@@ -53,18 +54,37 @@ def read_warehouse_query(
     This is the correct way to read system catalog views (``sys.*``,
     ``INFORMATION_SCHEMA.*``, ``queryinsights.*``) because the
     three-part-name reader only supports user tables.
+
+    Automatically retries on HTTP 429 (throttling) with exponential
+    back-off (4s, 8s, 16s, 32s — ~60s total).
     """
     if _FabricConstants is None:
         raise RuntimeError(
             "com.microsoft.spark.fabric is not available. "
             "This function must run inside a Fabric Spark session."
         )
-    reader = spark.read.option(_FabricConstants.DatabaseName, warehouse)
-    if workspace_id:
-        reader = reader.option(_FabricConstants.WorkspaceId, workspace_id)
-    if warehouse_id:
-        reader = reader.option(_FabricConstants.DatawarehouseId, warehouse_id)
-    return reader.synapsesql(query)
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            reader = spark.read.option(_FabricConstants.DatabaseName, warehouse)
+            if workspace_id:
+                reader = reader.option(_FabricConstants.WorkspaceId, workspace_id)
+            if warehouse_id:
+                reader = reader.option(_FabricConstants.DatawarehouseId, warehouse_id)
+            return reader.synapsesql(query)
+        except Exception as exc:
+            last_exc = exc
+            if "429" in str(exc) and attempt < max_retries - 1:
+                wait = 4 * 2 ** attempt  # 4s, 8s, 16s, 32s  (~60s total)
+                print(
+                    f"  \u26a0 HTTP 429 throttled — retrying in {wait}s "
+                    f"(attempt {attempt + 1}/{max_retries})..."
+                )
+                time.sleep(wait)
+                continue
+            raise
+    raise last_exc  # type: ignore[misc]
 
 
 def read_warehouse_table(
@@ -167,13 +187,17 @@ def get_current_clustering_config(
 def get_table_row_counts(
     spark: SparkSession,
     warehouse: str,
-    full_metadata: DataFrame,
+    full_metadata: DataFrame | None = None,
     min_rows: int = 0,
     workspace_id: str = "",
     warehouse_id: str = "",
+    verbose: bool = False,
 ) -> DataFrame:
     """
-    Return row counts for every table referenced in *full_metadata*.
+    Return row counts for every user table in the warehouse.
+
+    If *full_metadata* is provided, only tables referenced in it are
+    counted.  Otherwise **all** user tables (``sys.tables``) are counted.
 
     Uses per-table ``COUNT_BIG(*)`` via T-SQL passthrough so the count
     runs **inside** the SQL engine (no data transferred to Spark).
@@ -182,15 +206,27 @@ def get_table_row_counts(
 
     Returns: schema_name | table_name | row_count
     """
-    distinct_tables: List[Tuple[str, str]] = [
-        (row.schema_name, row.table_name)
-        for row in (
-            full_metadata
-            .select("schema_name", "table_name")
-            .distinct()
-            .collect()
+    if full_metadata is not None:
+        distinct_tables: List[Tuple[str, str]] = [
+            (row.schema_name, row.table_name)
+            for row in (
+                full_metadata
+                .select("schema_name", "table_name")
+                .distinct()
+                .collect()
+            )
+        ]
+    else:
+        _table_list_query = (
+            "SELECT SCHEMA_NAME(t.schema_id) AS schema_name, t.name AS table_name "
+            "FROM sys.tables t WHERE t.type = 'U'"
         )
-    ]
+        distinct_tables = [
+            (row["schema_name"], row["table_name"])
+            for row in read_warehouse_query(
+                spark, warehouse, _table_list_query, workspace_id, warehouse_id,
+            ).collect()
+        ]
 
     results = []
     for schema_name, table_name in distinct_tables:
@@ -205,10 +241,12 @@ def get_table_row_counts(
             ).collect()[0]
             count = cnt_row["cnt"]
             _elapsed = time.perf_counter() - _t0
-            print(f"    {schema_name}.{table_name}: {count:,} rows ({_elapsed:.2f}s)")
+            if verbose:
+                print(f"    {schema_name}.{table_name}: {count:,} rows ({_elapsed:.2f}s)")
             results.append((schema_name, table_name, count))
         except Exception as exc:
-            print(f"  [WARN] Could not count {schema_name}.{table_name}: {exc}")
+            if verbose:
+                print(f"  [WARN] Could not count {schema_name}.{table_name}: {exc}")
             results.append((schema_name, table_name, -1))
 
     schema = StructType([

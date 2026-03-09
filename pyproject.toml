@@ -3,14 +3,14 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fabric-warehouse-data-clustering-advisor"
-version = "0.3.0"
-description = "Assesses and recommends Data Clustering for Microsoft Fabric Warehouse tables."
+name = "fabric-warehouse-advisor"
+version = "0.4.0"
+description = "A modular advisory framework for Microsoft Fabric Warehouse — Data Clustering, Performance, Security and more."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "Fabric Warehouse Data Clustering Advisor Contributors"},
+    {name = "Fabric Warehouse Advisor Contributors"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
