@@ -84,7 +84,11 @@ def read_warehouse_query(
                 time.sleep(wait)
                 continue
             raise
-    raise last_exc  # type: ignore[misc]
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError(
+        "read_warehouse_query failed after retries without capturing an exception"
+    )
 
 
 def read_warehouse_table(

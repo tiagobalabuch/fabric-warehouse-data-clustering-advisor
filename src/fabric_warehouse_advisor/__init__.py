@@ -126,8 +126,12 @@ def _load_version() -> str:
     try:
         import tomllib  # type: ignore[import]
     except ModuleNotFoundError:
-        # tomllib is only available in Python 3.11+; if unavailable, use a safe default.
-        return "0.0.0"
+        # tomllib is only available in Python 3.11+; try the tomli backport if present.
+        try:
+            import tomli as tomllib  # type: ignore[import,assignment]
+        except ModuleNotFoundError:
+            # Neither tomllib nor tomli is available; use a safe default.
+            return "0.0.0"
 
     from pathlib import Path
 
