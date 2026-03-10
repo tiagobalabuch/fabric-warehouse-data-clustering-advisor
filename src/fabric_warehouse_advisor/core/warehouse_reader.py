@@ -57,6 +57,22 @@ def read_warehouse_query(
 
     Automatically retries on HTTP 429 (throttling) with exponential
     back-off (4s, 8s, 16s, 32s — ~60s total).
+
+    Parameters
+    ----------
+    spark : SparkSession
+        Active Spark session.
+    warehouse : str
+        Name of the Fabric Warehouse to query.
+    query : str
+        T-SQL query to execute.
+    workspace_id : str, optional
+        Fabric workspace ID. Defaults to the current workspace.
+    warehouse_id : str, optional
+        Fabric warehouse ID. Defaults to the current warehouse.
+    max_retries : int, optional
+        Maximum number of retry attempts on HTTP 429 throttling errors.
+        Uses exponential back-off (4s, 8s, 16s, …). Defaults to 5.
     """
     if _FabricConstants is None:
         raise RuntimeError(
@@ -104,6 +120,24 @@ def read_warehouse_table(
 
     Automatically retries on HTTP 429 (throttling) with exponential
     back-off (4s, 8s, 16s, 32s — ~60s total).
+
+    Parameters
+    ----------
+    spark : SparkSession
+        Active Spark session.
+    warehouse : str
+        Name of the Fabric Warehouse.
+    schema : str
+        Schema name of the target table.
+    table_name : str
+        Name of the target table.
+    workspace_id : str, optional
+        Fabric workspace ID. Defaults to the current workspace.
+    warehouse_id : str, optional
+        Fabric warehouse ID. Defaults to the current warehouse.
+    max_retries : int, optional
+        Maximum number of retry attempts on HTTP 429 throttling errors.
+        Uses exponential back-off (4s, 8s, 16s, …). Defaults to 5.
     """
     three_part = f"{warehouse}.{schema}.{table_name}"
 

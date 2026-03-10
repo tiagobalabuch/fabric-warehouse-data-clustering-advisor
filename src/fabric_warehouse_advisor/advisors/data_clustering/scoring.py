@@ -370,9 +370,7 @@ def build_table_recommendations(
                 # SQL Server identifier limit is 128 characters
                 max_id_len = 128
                 suffix = f"_clust_{c.column_name}"
-                if len(table) + len(suffix) > max_id_len:
-                    suffix = suffix[:max_id_len - len(table)]
-                new_table = f"{table}{suffix}"
+                new_table = (table + suffix)[:max_id_len]
                 ddl_parts.append(
                     f"CREATE TABLE [{schema}].[{new_table}]\n"
                     f"WITH (CLUSTER BY ([{c.column_name}]))\n"
