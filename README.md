@@ -22,14 +22,14 @@ Download the latest `.whl` file from
 then install it in your Fabric notebook:
 
 ```python
-%pip install /lakehouse/default/Files/fabric_warehouse_advisor-0.4.0-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_advisor-1.0.0-py3-none-any.whl
 ```
 
 ### Option B: Build from Source
 
 ```bash
 pip install build
-python -m build          # produces dist/fabric_warehouse_advisor-0.4.0-py3-none-any.whl
+python -m build          # produces dist/fabric_warehouse_advisor-1.0.0-py3-none-any.whl
 ```
 
 ### Install in Fabric
@@ -42,7 +42,7 @@ See [Getting Started](docs/getting-started.md) for detailed instructions.
 
 ## Quick Start
 
-=== "Data Clustering"
+### Data Clustering
 
 ```python
 from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig

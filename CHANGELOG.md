@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 This file is automatically updated by the release workflow.
 
-## [v0.4.0] — Fabric Warehouse Advisor (modular rewrite)
+## [v1.0.0] — Fabric Warehouse Advisor (modular rewrite)
 
 ### Changed
 - **Renamed package** from `fabric-warehouse-data-clustering-advisor` to `fabric-warehouse-advisor`.

@@ -114,7 +114,12 @@ except ImportError:  # pragma: no cover - Python < 3.8 fallback
 def _load_version() -> str:
     """
     Load the package version from installed metadata, falling back to pyproject.toml.
+
+    Returns ``"0.0.0"`` and emits a warning when the version cannot be
+    determined (e.g. the package is not installed and neither ``tomllib``
+    nor ``tomli`` is available).
     """
+    import warnings
     # First, try the installed package metadata.
     if _metadata is not None:
         try:
@@ -131,6 +136,12 @@ def _load_version() -> str:
             import tomli as tomllib  # type: ignore[import,assignment]
         except ModuleNotFoundError:
             # Neither tomllib nor tomli is available; use a safe default.
+            warnings.warn(
+                "fabric_warehouse_advisor version could not be determined: "
+                "package is not installed and neither tomllib (Python 3.11+) "
+                "nor the tomli backport is available. Reporting version as '0.0.0'.",
+                stacklevel=2,
+            )
             return "0.0.0"
 
     from pathlib import Path
@@ -142,6 +153,12 @@ def _load_version() -> str:
         return data.get("project", {}).get("version", "0.0.0")
 
     # As a last resort, return a placeholder version rather than failing import.
+    warnings.warn(
+        "fabric_warehouse_advisor version could not be determined: "
+        "pyproject.toml not found and package metadata unavailable. "
+        "Reporting version as '0.0.0'.",
+        stacklevel=2,
+    )
     return "0.0.0"
 
 
