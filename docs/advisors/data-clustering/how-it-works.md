@@ -138,8 +138,7 @@ reading through the Spark connector (slower, but reliable).
 ## Phase 7: Scoring & Recommendations
 
 Combines all signals into a composite score per column and groups
-results into per-table recommendations. See [Scoring](scoring.md)
-for the detailed formulas.
+results into per-table recommendations. See [Scoring](scoring.md) for the detailed formulas.
 
 This phase produces:
 

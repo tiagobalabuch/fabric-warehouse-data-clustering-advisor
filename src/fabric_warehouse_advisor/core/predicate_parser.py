@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - SQL Predicate Parser
+Fabric Warehouse Advisor — Core SQL Predicate Parser
 ======================================================
 Extracts column names that appear in WHERE-clause predicates from
 raw SQL query text.  Two strategies are provided:

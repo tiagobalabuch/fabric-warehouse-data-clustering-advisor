@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - Configuration
+Fabric Warehouse Advisor — Data Clustering Configuration
 =========================================================
 All configuration values are exposed as fields of the
 ``DataClusteringAdvisorConfig`` dataclass with sensible defaults.
@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class DataClusteringAdvisorConfig:
-    """Configuration for the Fabric Warehouse Data Clustering Advisor.
+    """Configuration for the Data Clustering Advisor.
 
     Every public constant that was previously in the flat ``config.py``
     module is now a field here, with the same default value.  Pass an
@@ -38,7 +38,7 @@ class DataClusteringAdvisorConfig:
         for cross-workspace access together with ``workspace_id``.
 
     min_row_count : int
-        Minimum row count for a table to be considered for clustering
+        Minimum row count for a table to be considered for data clustering
         analysis.  Tables smaller than this are skipped entirely.
 
     large_table_rows : int
@@ -104,6 +104,10 @@ class DataClusteringAdvisorConfig:
 
     verbose : bool
         If ``True``, display intermediate DataFrames for debugging.
+
+    phase_delay : float
+        Seconds to pause between phases to reduce HTTP 429 throttling
+        from the Fabric control-plane API.  Set to ``0`` to disable.
     """
 
     # -- Connection --
@@ -141,6 +145,9 @@ class DataClusteringAdvisorConfig:
 
     # -- Output --
     verbose: bool = False
+
+    # -- Throttle protection --
+    phase_delay: float = 1.0
 
     def validate(self) -> None:
         """Raise ``ValueError`` if the configuration is not usable."""

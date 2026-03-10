@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - Scoring & Recommendation Engine
+Fabric Warehouse Advisor — Data Clustering Scoring & Recommendation Engine
 =================================================================
 Combines all signals (table size, predicate frequency, cardinality,
 data-type support) into a composite score and produces ranked
@@ -367,8 +367,32 @@ def build_table_recommendations(
         ddl_parts = []
         if generate_ctas:
             for c in candidates:
+                # SQL Server identifier limit is 128 characters.
+                # Truncate the base table name first so the full
+                # column-name suffix is always preserved when possible.
+                max_id_len = 128
+                suffix = f"_clust_{c.column_name}"
+                original_name = f"{table}{suffix}"
+                if len(suffix) >= max_id_len:
+                    # Even when the suffix alone is too long, always retain
+                    # at least a portion of the base table name to avoid
+                    # confusing identifiers.
+                    base_reserved = min(len(table), max_id_len // 4 or 1)
+                    suffix_len = max_id_len - base_reserved
+                    new_table = table[:base_reserved] + suffix[:suffix_len]
+                else:
+                    max_base = max_id_len - len(suffix)
+                    new_table = table[:max_base] + suffix
+                if len(original_name) > max_id_len:
+                    warnings.append(
+                        f"CTAS table name for [{schema}].[{table}] with column "
+                        f"[{c.column_name}] was truncated to [{new_table}] to "
+                        f"respect the 128-character identifier limit. "
+                        f"Very long column names may lead to less readable "
+                        f"derived table names."
+                    )
                 ddl_parts.append(
-                    f"CREATE TABLE [{schema}].[{table}_clustered]\n"
+                    f"CREATE TABLE [{schema}].[{new_table}]\n"
                     f"WITH (CLUSTER BY ([{c.column_name}]))\n"
                     f"AS SELECT * FROM [{schema}].[{table}];"
                 )

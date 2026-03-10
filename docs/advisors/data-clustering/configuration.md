@@ -5,7 +5,7 @@ Create an instance, override the defaults you need, and pass it to
 `DataClusteringAdvisor`.
 
 ```python
-from fabric_warehouse_data_clustering_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
 
 config = DataClusteringAdvisorConfig(
     warehouse_name="MyWarehouse",
@@ -22,8 +22,8 @@ result = advisor.run()
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `warehouse_name` | `str` | `""` | **Required.** The Fabric Warehouse name used in the Spark connector's three-part naming. |
-| `workspace_id` | `str` | `""` | Workspace GUID. Only needed for [cross-workspace](cross-workspace.md) access. |
-| `warehouse_id` | `str` | `""` | Warehouse item GUID. Only needed for [cross-workspace](cross-workspace.md) access. |
+| `workspace_id` | `str` | `""` | Workspace GUID. Only needed for [cross-workspace](../../cross-workspace.md) access. |
+| `warehouse_id` | `str` | `""` | Warehouse item GUID. Only needed for [cross-workspace](../../cross-workspace.md) access. |
 
 ## Threshold Parameters
 

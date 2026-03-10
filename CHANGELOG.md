@@ -3,7 +3,21 @@
 All notable changes to this project will be documented in this file.
 This file is automatically updated by the release workflow.
 
-## [v0.3.0](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/tag/v0.3.0)
+## [v1.0.0] — Fabric Warehouse Advisor (modular rewrite)
+
+### Changed
+- **Renamed package** from `fabric-warehouse-data-clustering-advisor` to `fabric-warehouse-advisor`.
+- **Reorganised into a modular architecture** with shared `core/` infrastructure and an `advisors/` sub-package.
+  - `core/warehouse_reader.py` — Spark connector wrappers (shared by all advisors).
+  - `core/predicate_parser.py` — SQL predicate extraction (shared by all advisors).
+  - `core/report.py` — `save_report()` utility (shared by all advisors).
+  - `advisors/data_clustering/` — the full Data Clustering Advisor module.
+- All public exports remain available from the top-level `fabric_warehouse_advisor` package for backward compatibility.
+
+### Added
+- Extensible advisor framework — future advisors (Performance, Security, etc.) will live under `advisors/`.
+
+## [v0.3.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v0.3.0)
 
 - Merge pull request #5 from tiagobalabuch/docs/readme-install-steps
 - Improve documentation clarity in installation and how it works guides
@@ -32,7 +46,7 @@ This file is automatically updated by the release workflow.
 - Add in-repo documentation and GitHub Actions release workflow
 - Initial commit: Fabric Warehouse Data Clustering Advisor v0.2.0
 
-## [v0.2.1](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/tag/v0.2.1)
+## [v0.2.1](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v0.2.1)
 
 - Merge pull request #5 from tiagobalabuch/docs/readme-install-steps
 - Improve documentation clarity in installation and how it works guides
@@ -46,7 +60,7 @@ This file is automatically updated by the release workflow.
 - Use force push for changelog branch
 - Handle existing changelog branch in release workflow
 
-## [v0.2.0](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/tag/v0.2.0)
+## [v0.2.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v0.2.0)
 
 - Add pull-requests write permission to release workflow
 - Enhance release workflow to commit CHANGELOG.md and create a pull request for automated updates
@@ -54,7 +68,7 @@ This file is automatically updated by the release workflow.
 - Merge pull request #2 from tiagobalabuch/DocumentationImprovements
 - Update version to 0.3.0, enhance release workflow with changelog generation, and remove hybrid predicate extraction strategy
 
-## [v0.1.0](https://github.com/tiagobalabuch/fabric-warehouse-data-clustering-advisor/releases/tag/v0.1.0)
+## [v0.1.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v0.1.0)
 
 - Bump version to 0.2.0 in pyproject.toml
 - Implement hybrid predicate extraction strategy using execution plans

@@ -1,5 +1,5 @@
 """
-Fabric Warehouse Data Clustering Advisor - Data Type Support
+Fabric Warehouse Advisor — Data Clustering Data Type Support
 ====================================================
 Encapsulates the rules for which SQL data types are supported
 by Fabric Warehouse Data Clustering, including warnings for
@@ -27,7 +27,7 @@ _NEVER_SUPPORTED = frozenset({"bit", "varbinary", "uniqueidentifier"})
 
 @dataclass(frozen=True)
 class DataTypeAssessment:
-    """Result of evaluating a column's data type for clustering."""
+    """Result of evaluating a column's data type for data clustering."""
     is_supported: bool
     support_label: str
     optimization_flag: str
