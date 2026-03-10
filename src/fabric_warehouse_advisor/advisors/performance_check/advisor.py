@@ -201,6 +201,43 @@ class PerformanceCheckAdvisor:
                 self._log(f"       SQL   : {f.sql_fix}")
         self._log_footer()
 
+    def _run_phase(
+        self,
+        phase_label: str,
+        check_fn,
+        *args: object,
+        **kwargs: object,
+    ) -> Tuple[List[Finding], float]:
+        """Run a check phase with timing and verbose severity logging.
+
+        Parameters
+        ----------
+        phase_label : str
+            Printed to stdout, e.g. ``"Phase 2: Analysing caching …"``.
+        check_fn : callable
+            The check function.  Must return ``List[Finding]``.
+        *args, **kwargs
+            Forwarded to *check_fn*.
+
+        Returns
+        -------
+        tuple[list[Finding], float]
+            The findings produced and elapsed wall-clock seconds.
+        """
+        _t0 = time.perf_counter()
+        print(f"{phase_label} ...")
+        findings = check_fn(*args, **kwargs)
+        _ct = sum(1 for f in findings if f.is_critical)
+        _ht = sum(1 for f in findings if f.is_high)
+        _mt = sum(1 for f in findings if f.is_medium)
+        _lt = sum(1 for f in findings if f.is_low)
+        _it = sum(1 for f in findings if f.is_info)
+        self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
+        self._log_findings_detail(findings)
+        elapsed = time.perf_counter() - _t0
+        self._log(f"  ⏱ {phase_label.split(':')[0]} completed in {elapsed:.2f}s")
+        return findings, elapsed
+
     # ---- public API ----
 
     def run(self) -> PerformanceCheckResult:
@@ -293,19 +330,12 @@ class PerformanceCheckAdvisor:
         # Phase 2: Caching Analysis
         # ================================================================
         if cfg.check_caching:
-            _t0 = time.perf_counter()
-            print("Phase 2: Analysing caching configuration ...")
-            cache_findings = check_caching(spark, cfg.warehouse_name, cfg)
-            all_findings.extend(cache_findings)
-            _ct = sum(1 for f in cache_findings if f.is_critical)
-            _ht = sum(1 for f in cache_findings if f.is_high)
-            _mt = sum(1 for f in cache_findings if f.is_medium)
-            _lt = sum(1 for f in cache_findings if f.is_low)
-            _it = sum(1 for f in cache_findings if f.is_info)
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(cache_findings)
-            _phase_timings["Phase 2: Caching"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 2 completed in {_phase_timings['Phase 2: Caching']:.2f}s")
+            findings, elapsed = self._run_phase(
+                "Phase 2: Analysing caching configuration",
+                check_caching, spark, cfg.warehouse_name, cfg,
+            )
+            all_findings.extend(findings)
+            _phase_timings["Phase 2: Caching"] = elapsed
         else:
             self._log("Phase 2: Caching analysis — SKIPPED (disabled in config)")
         if cfg.phase_delay > 0:
@@ -314,21 +344,13 @@ class PerformanceCheckAdvisor:
         # Phase 3: V-Order Check
         # ================================================================
         if cfg.check_vorder:
-            _t0 = time.perf_counter()
-            print("Phase 3: Checking V-Order optimization ...")
-            vorder_findings = check_vorder(
-                spark, cfg.warehouse_name, cfg, edition=edition,
+            findings, elapsed = self._run_phase(
+                "Phase 3: Checking V-Order optimization",
+                check_vorder, spark, cfg.warehouse_name, cfg,
+                edition=edition,
             )
-            all_findings.extend(vorder_findings)
-            _ct = sum(1 for f in vorder_findings if f.is_critical)
-            _ht = sum(1 for f in vorder_findings if f.is_high)
-            _mt = sum(1 for f in vorder_findings if f.is_medium)
-            _lt = sum(1 for f in vorder_findings if f.is_low)
-            _it = sum(1 for f in vorder_findings if f.is_info)
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(vorder_findings)
-            _phase_timings["Phase 3: V-Order"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 3 completed in {_phase_timings['Phase 3: V-Order']:.2f}s")
+            all_findings.extend(findings)
+            _phase_timings["Phase 3: V-Order"] = elapsed
         else:
             self._log("Phase 3: V-Order check — SKIPPED (disabled in config)")
         if cfg.phase_delay > 0:
@@ -337,21 +359,12 @@ class PerformanceCheckAdvisor:
         # Phase 4: Statistics Health
         # ================================================================
         if cfg.check_statistics:
-            _t0 = time.perf_counter()
-            print("Phase 4: Analysing statistics health ...")
-            stats_findings = check_statistics(
-                spark, cfg.warehouse_name, cfg,
+            findings, elapsed = self._run_phase(
+                "Phase 4: Analysing statistics health",
+                check_statistics, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(stats_findings)
-            _ct = sum(1 for f in stats_findings if f.is_critical)
-            _ht = sum(1 for f in stats_findings if f.is_high)
-            _mt = sum(1 for f in stats_findings if f.is_medium)
-            _lt = sum(1 for f in stats_findings if f.is_low)
-            _it = sum(1 for f in stats_findings if f.is_info)
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(stats_findings)
-            _phase_timings["Phase 4: Statistics"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 4 completed in {_phase_timings['Phase 4: Statistics']:.2f}s")
+            all_findings.extend(findings)
+            _phase_timings["Phase 4: Statistics"] = elapsed
         else:
             self._log("Phase 4: Statistics health — SKIPPED (disabled in config)")
         if cfg.phase_delay > 0:
@@ -360,21 +373,12 @@ class PerformanceCheckAdvisor:
         # Phase 5: Collation Mismatch
         # ================================================================
         if cfg.check_collation:
-            _t0 = time.perf_counter()
-            print("Phase 5: Checking collation consistency ...")
-            collation_findings = check_collation(
-                spark, cfg.warehouse_name, cfg,
+            findings, elapsed = self._run_phase(
+                "Phase 5: Checking collation consistency",
+                check_collation, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(collation_findings)
-            _ct = sum(1 for f in collation_findings if f.is_critical)
-            _ht = sum(1 for f in collation_findings if f.is_high)
-            _mt = sum(1 for f in collation_findings if f.is_medium)
-            _lt = sum(1 for f in collation_findings if f.is_low)
-            _it = sum(1 for f in collation_findings if f.is_info)
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(collation_findings)
-            _phase_timings["Phase 5: Collation"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 5 completed in {_phase_timings['Phase 5: Collation']:.2f}s")
+            all_findings.extend(findings)
+            _phase_timings["Phase 5: Collation"] = elapsed
         else:
             self._log("Phase 5: Collation check — SKIPPED (disabled in config)")
         if cfg.phase_delay > 0:
@@ -383,21 +387,12 @@ class PerformanceCheckAdvisor:
         # Phase 6: Query Regression Detection
         # ================================================================
         if cfg.check_query_regression:
-            _t0 = time.perf_counter()
-            print("Phase 6: Detecting query regressions ...")
-            regression_findings = check_query_regression(
-                spark, cfg.warehouse_name, cfg,
+            findings, elapsed = self._run_phase(
+                "Phase 6: Detecting query regressions",
+                check_query_regression, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(regression_findings)
-            _ct = sum(1 for f in regression_findings if f.is_critical)
-            _ht = sum(1 for f in regression_findings if f.is_high)
-            _mt = sum(1 for f in regression_findings if f.is_medium)
-            _lt = sum(1 for f in regression_findings if f.is_low)
-            _it = sum(1 for f in regression_findings if f.is_info)
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(regression_findings)
-            _phase_timings["Phase 6: Query regression"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 6 completed in {_phase_timings['Phase 6: Query regression']:.2f}s")
+            all_findings.extend(findings)
+            _phase_timings["Phase 6: Query regression"] = elapsed
         else:
             self._log("Phase 6: Query regression — SKIPPED (disabled in config)")
 

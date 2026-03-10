@@ -80,8 +80,15 @@ _ALL_STATISTICS_QUERY = """
 """
 
 _STATS_HEADER_QUERY = """
-    DBCC SHOW_STATISTICS ('{schema}.{table}', '{stats_name}') WITH STAT_HEADER
+    DBCC SHOW_STATISTICS ('[{schema}].[{table}]', '[{stats_name}]') WITH STAT_HEADER
 """
+
+
+# -- SQL identifier helper -----------------------------------------------
+
+def _quote_ident(name: str) -> str:
+    """Escape a SQL Server identifier for use inside square brackets."""
+    return name.replace("]", "]]")
 
 
 # -- Public API ---------------------------------------------------------
@@ -401,12 +408,9 @@ def _check_stats_health(
                             f"Update statistics to reflect current data distribution."
                         ),
                         sql_fix=(
-                            f"UPDATE STATISTICS [{schema}].[{table}] "
-                            f"({stats_name}) WITH FULLSCAN;"
+                            f"UPDATE STATISTICS [{_quote_ident(schema)}].[{_quote_ident(table)}] "
+                            f"([{_quote_ident(stats_name)}]) WITH FULLSCAN;"
                         ),
-                    ))
-            except (TypeError, ValueError):
-                pass  # Could not parse date; skip staleness check
 
     # --- Row count drift ---
     for (schema, table), stats_list in stats_by_table.items():
@@ -428,7 +432,9 @@ def _check_stats_health(
 
             try:
                 header_query = _STATS_HEADER_QUERY.format(
-                    schema=schema, table=table, stats_name=stats_name,
+                    schema=_quote_ident(schema),
+                    table=_quote_ident(table),
+                    stats_name=_quote_ident(stats_name),
                 )
                 header_df = read_warehouse_query(
                     spark, warehouse, header_query,
@@ -463,8 +469,8 @@ def _check_stats_health(
                                     "row count estimates for plan costing."
                                 ),
                                 sql_fix=(
-                                    f"UPDATE STATISTICS [{schema}].[{table}] "
-                                    f"({stats_name}) WITH FULLSCAN;"
+                                    f"UPDATE STATISTICS [{_quote_ident(schema)}].[{_quote_ident(table)}] "
+                                    f"([{_quote_ident(stats_name)}]) WITH FULLSCAN;"
                                 ),
                             ))
             except Exception:

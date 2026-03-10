@@ -12,6 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Number of leading characters to inspect when detecting whether
+# content already contains an HTML document wrapper.
+_HTML_CHECK_PREFIX_LEN = 200
+
 
 def save_report(
     content: str,
@@ -49,7 +53,7 @@ def save_report(
             format = "txt"
 
     # For HTML format, wrap in a minimal HTML document if not already present
-    if format == "html" and "<html" not in content[:200].lower():
+    if format == "html" and "<html" not in content[:_HTML_CHECK_PREFIX_LEN].lower():
         content = (
             "<!DOCTYPE html>\n<html lang='en'>\n<head>"
             "<meta charset='utf-8'>"
