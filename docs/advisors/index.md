@@ -4,12 +4,6 @@ The Fabric Warehouse Advisor ships with modular advisor modules.
 Each one analyses a different aspect of warehouse health and produces
 its own reports.
 
-print(f"Critical: {result.critical_count}")
-print(f"High:     {result.high_count}")
-print(f"Medium:   {result.medium_count}")
-print(f"Low:      {result.low_count}")
-print(f"Info:     {result.info_count}")
-
 ## Advisor Comparison
 
 | | Data Clustering | Performance Check |
@@ -23,7 +17,7 @@ print(f"Info:     {result.info_count}")
 | **Reports** | Text, Markdown, HTML | Text, Markdown, HTML |
 | **DDL generation** | Yes (CTAS statements) | Yes (per-finding SQL fixes) |
 
-## Data Clustering Advisor
+| **Phases** | 7 (metadata → scoring) | 7 (edition → statistics) |
 
 Analyses your **actual query patterns** (via Query Insights), combines
 them with **table metadata** and **column cardinality estimates**, and

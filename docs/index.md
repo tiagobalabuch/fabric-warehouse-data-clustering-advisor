@@ -53,8 +53,8 @@ displayHTML(pc_result.html_report)
 | **Advisors** | [Overview](advisors/index.md) |
 | &nbsp;&nbsp;[Data Clustering](advisors/data-clustering/index.md) | Overview, pipeline, configuration, scoring, reports |
 | &nbsp;&nbsp;[Performance Check](advisors/performance-check/index.md) | Overview, pipeline, configuration, checks reference, reports |
-|[Cross-Workspace](cross-workspace.md) | Analysing warehouses in other workspaces |
-|[Troubleshooting](troubleshooting.md) | Common issues and solutions |
+| [Cross-Workspace](cross-workspace.md) | Analysing warehouses in other workspaces |
+| [Troubleshooting](troubleshooting.md) | Common issues and solutions |
 
 ## License
 

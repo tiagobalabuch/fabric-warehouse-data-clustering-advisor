@@ -85,7 +85,7 @@ for f in result.findings:
 ```python
 # Only critical findings
 critical = [f for f in result.findings if f.is_critical]
-display(dt_findings)
+display(critical)
 
 # Only data type findings
 from fabric_warehouse_advisor.advisors.performance_check.findings import CATEGORY_DATA_TYPES

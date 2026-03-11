@@ -236,7 +236,7 @@ FROM sys.databases WHERE database_id = DB_ID()
 **Per-table staleness** — iterates all statistics from `sys.stats` and
 checks `STATS_DATE()` against the configured threshold.
 
-**Row count drift** — compares `COUNT_BIG(*) result which Fabric resolves from columnstore` actual row count to the estimate from `DBCC SHOW_STATISTICS ... WITH STAT_HEADER`. A large drift means the optimizer is working with outdated cardinality estimates.
+**Row count drift** — compares the `COUNT_BIG(*)` result, which Fabric resolves from columnstore metadata, to the estimate from `DBCC SHOW_STATISTICS ... WITH STAT_HEADER`. A large drift means the optimizer is working with outdated cardinality estimates.
 
 ### SQL Fixes
 
