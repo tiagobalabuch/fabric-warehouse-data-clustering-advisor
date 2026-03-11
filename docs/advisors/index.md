@@ -19,7 +19,7 @@ its own reports.
 
 
 ## Data Clustering Advisor
-    
+
 Analyses your **actual query patterns** (via Query Insights), combines them with **table metadata** and **column cardinality estimates**, and scores every candidate column from 0 to 100. You get a clear report telling you exactly what to cluster and why.
 
 ```python

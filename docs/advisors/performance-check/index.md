@@ -37,7 +37,7 @@ Unlike the Data Clustering advisor (which produces scores), the
 Performance Check advisor produces **findings** at five severity levels:
 
 | Level | Meaning |
-|-------|--------|
+|-------|---------|
 | **CRITICAL** | Immediate action required — significant performance impact |
 | **HIGH** | Important issue — should be addressed soon |
 | **MEDIUM** | Worth reviewing — potential performance improvement |
