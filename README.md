@@ -15,7 +15,15 @@ It runs entirely inside a **Fabric Notebook**. The Microsoft Fabric Data Warehou
 
 ## Installation
 
-### Option A: Download Pre-Built Wheel (Recommended)
+### Option A: Install directly from PyPI (Recommended)
+
+```python
+%pip install fabric-warehouse-advisor==1.0.3
+```
+
+For version information, dependencies, and release notes, see the [details](https://pypi.org/project/fabric-warehouse-advisor/).
+
+### Option B: Download Pre-Built Wheel
 
 Download the latest `.whl` file from
 [**GitHub Releases**](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/latest),
@@ -25,7 +33,7 @@ then install it in your Fabric notebook:
 %pip install /lakehouse/default/Files/fabric_warehouse_advisor-1.0.3-py3-none-any.whl
 ```
 
-### Option B: Build from Source
+### Option C: Build from Source
 
 ```bash
 pip install build
@@ -34,9 +42,15 @@ python -m build          # produces dist/fabric_warehouse_advisor-1.0.3-py3-none
 
 ### Install in Fabric
 
-Upload the `.whl` file to your Lakehouse **Files** area and use `%pip install`,
-or attach it via a Fabric **Environment** resource so it's pre-installed on
-every Spark session.
+### Option A: Install directly from PyPI (Recommended)
+
+```python
+%pip install fabric-warehouse-advisor==1.0.3
+```
+
+### Option B: Upload the Pre-Built Wheel
+
+Upload the `.whl` file to your Lakehouse **Files** area and use `%pip install`, or attach it via a Fabric **Environment** resource so it's pre-installed on every Spark session.
 
 See [Getting Started](docs/getting-started.md) for detailed instructions.
 
@@ -45,9 +59,9 @@ See [Getting Started](docs/getting-started.md) for detailed instructions.
 ### Data Clustering
 
 ```python
-from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringConfig
 
-config = DataClusteringAdvisorConfig(
+config = DataClusteringConfig(
     warehouse_name="MyWarehouse",
 )
 
@@ -58,7 +72,7 @@ result = advisor.run()
 displayHTML(result.html_report)
 ```
 
-=== "Performance Check"
+### Performance Check
 
 ```python
 from fabric_warehouse_advisor import PerformanceCheckAdvisor, PerformanceCheckConfig
@@ -123,7 +137,7 @@ src/fabric_warehouse_advisor/
     ├── __init__.py
     ├── data_clustering/
     │   ├── __init__.py                # Data Clustering Advisor exports
-    │   ├── config.py                  # DataClusteringAdvisorConfig dataclass
+    │   ├── config.py                  # DataClusteringConfig dataclass
     │   ├── advisor.py                 # DataClusteringAdvisor orchestrator
     │   ├── data_type_support.py       # Data-type eligibility rules
     │   ├── scoring.py                 # Composite scoring + DDL generation

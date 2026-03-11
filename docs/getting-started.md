@@ -20,13 +20,21 @@ and running your first analysis.
 
 ## Getting the Wheel
 
-### Option A: Download Pre-Built (Recommended)
+### Option A: Install directly from PyPI (Recommended)
+
+```python
+%pip install fabric-warehouse-advisor==1.0.3
+```
+
+For version information, dependencies, and release notes, see the [details](https://pypi.org/project/fabric-warehouse-advisor/).
+
+### Option B: Download Pre-Built
 
 Download the latest `.whl` file from the
 [GitHub Releases](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/latest)
 page — no build tools required.
 
-### Option B: Build from Source
+### Option C: Build from Source
 
 On your local machine (or in any Python 3.9+ environment):
 
@@ -46,6 +54,14 @@ You only need the `.whl` file for Fabric.
 
 ### Option A: Per-Notebook Install (Recommended)
 
+Run PIP install 
+
+```python
+%pip install fabric-warehouse-advisor==1.0.3
+```
+
+### Option B: Per-Notebook Install
+
 1. Upload the `.whl` file to your Lakehouse **Files** area (see the [official documentation](https://learn.microsoft.com/en-us/fabric/data-engineering/load-data-lakehouse#upload-files) for detailed upload instructions).
 2. In the first cell of your notebook, run:
 
@@ -55,7 +71,7 @@ You only need the `.whl` file for Fabric.
 
 This is the quickest way to get up and running.
 
-### Option B: Fabric Environment
+### Option C: Fabric Environment
 
 For a more permanent setup, you can attach the library to a Fabric Environment (see the [official documentation](https://learn.microsoft.com/en-us/fabric/data-engineering/create-and-use-environment)):
 
@@ -75,9 +91,9 @@ Analyses your warehouse and recommends which tables and columns should
 use `CLUSTER BY`:
 
 ```python
-from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
+from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringConfig
 
-config = DataClusteringAdvisorConfig(
+config = DataClusteringConfig(
     warehouse_name="MyWarehouse",
 )
 
