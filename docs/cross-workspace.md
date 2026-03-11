@@ -17,6 +17,10 @@ https://app.fabric.microsoft.com/groups/{WorkspaceID}/warehouses/{WarehouseID}
 |-----------|---------------|
 | `workspace_id` | The GUID after `/groups/` in the URL when you are in the workspace |
 | `warehouse_id` | The GUID after `/warehouses/` in the URL when the warehouse is open |
+| `sql_endpoint_id` | The GUID after `/mirroredwarehouses/` in the URL when the SQL Analytics Endpoint is open |
+
+!!! tip "sql_endpoint_id is optional"
+    You must specify either warehouse_id or sql_endpoint_id, depending on where you want the advisor to run. Use `warehouse_id` to run the advisor against a **Warehouse**. Use `sql_endpoint_id` to run the advisor against a **SQL Analytics Endpoint**
 
 ## Configuration
 
@@ -33,6 +37,7 @@ Both advisors accept the same cross-workspace parameters.
         # Cross-workspace: both are required together
         workspace_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         warehouse_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+        # sql_endpoint_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
     )
 
     advisor = DataClusteringAdvisor(spark, config)
@@ -50,6 +55,7 @@ Both advisors accept the same cross-workspace parameters.
         # Cross-workspace: both are required together
         workspace_id="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
         warehouse_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
+        # sql_endpoint_id="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy",
     )
 
     advisor = PerformanceCheckAdvisor(spark, config)
@@ -74,9 +80,8 @@ the Fabric Spark runtime's built-in connector.
 
 - The identity running the notebook (your Entra ID / service principal)
   must have **at least Read access** on the target warehouse
-- The target warehouse must be in the same Fabric tenant
-- Both `workspace_id` and `warehouse_id` must be specified together —
-  providing only one will not work
+- The target warehouse / sql endpoint must be in the same Fabric tenant
+- Both `workspace_id` and either `warehouse_id` or `sql_endpoint_id` must be specified together — providing only one will not work
 
 ## Same-Workspace Usage
 

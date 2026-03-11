@@ -1,6 +1,6 @@
 # Fabric Warehouse Advisor
 
-A modular PySpark **advisory framework** for **Microsoft Fabric Warehouse**.
+A modular Python **advisory framework** for **Microsoft Fabric Warehouse**.
 Each advisor module analyses a different aspect of warehouse health and
 produces scored recommendations with rich reports.
 

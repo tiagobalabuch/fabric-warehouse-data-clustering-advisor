@@ -1,12 +1,8 @@
 # Fabric Warehouse Advisor
 
-A **modular PySpark advisory framework** for
-**Microsoft Fabric Warehouse**. Each advisor module analyses a different
-aspect of warehouse health and produces actionable recommendations with
-rich reports.
+A **modular python advisory framework** for **Microsoft Fabric Warehouse**. Each advisor module analyses a different aspect of warehouse health and produces actionable recommendations with rich reports.
 
-Everything runs inside a **Fabric Notebook** — no external tools,
-no data leaves your environment.
+Everything runs inside a **Fabric Notebook** — no external tools, no data leaves your environment.
 
 ## Available Advisors
 

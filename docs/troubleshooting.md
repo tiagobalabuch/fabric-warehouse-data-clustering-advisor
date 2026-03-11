@@ -239,14 +239,3 @@ config = PerformanceCheckConfig(
     vorder_warn_if_disabled=False,
 )
 ```
-
-### Proactive Stats Refresh Check Fails
-
-**Cause:** The `is_proactive_statistics_refresh_on` column may not exist
-on all Fabric SKUs.
-
-**Impact:** A `proactive_refresh_check_failed` INFO finding is reported.
-All other statistics checks run normally.
-
-**Solution:** This is informational — no action required. The feature
-may become available as Fabric evolves.
