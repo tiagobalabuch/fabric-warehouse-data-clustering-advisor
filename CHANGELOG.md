@@ -5,14 +5,17 @@ This file is automatically updated by the release workflow.
 
 ## [v1.0.3](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v1.0.3)
 
-- Bump version to 1.0.3
-- Remove NVARCHAR-related checks (NVARCHAR is unsupported in Fabric Data Warehouse)
-- Remove dead `orphaned_stats_check` code
-- Add Phase 0 edition gate to Data Clustering Advisor
-- Rename timing variables for readability
-
-## [v1.0.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v1.0.0)
-
+- Merge pull request #10 from tiagobalabuch/bug/smalfix
+- Bump version to 1.0.3 in pyproject.toml
+- Refactor Performance Check Advisor code: clarify data type checks, remove NVARCHAR warnings, and enhance warehouse edition detection logic. Reflected the changes in the documentation
+- Merge pull request #9 from tiagobalabuch/docs/v2-rewrite
+- Update documentation for Data Clustering and Performance Check advisors: fix formatting issues and clarify descriptions.
+- Update documentation for various advisors: clarify report printing behavior, enhance report format descriptions, and correct minor formatting issues.
+- Refactor documentation for advisors: remove unnecessary print statements, clarify row count drift description, and update links in the main index.
+- Refine documentation for Fabric Warehouse Advisor: correct "PySpark" to "Python". Enhance cross-workspace documentation by clarifying sql_endpoint_id usage and updating parameter requirements. Remove outdated troubleshooting section on proactive stats refresh check.
+- Update documentation for Performance Check and Data Clustering advisors, enhancing clarity on severity levels, access requirements, and report formats.
+- Merge pull request #8 from tiagobalabuch/changelog/v1.0.0
+- Update CHANGELOG.md for v1.0.0
 - Merge pull request #7 from tiagobalabuch/feature/performance-advisor
 - Bump version to 1.0.0, update installation instructions, and enhance version loading with warnings for better user feedback
 - Enhance query regression checks to use window functions for median calculations and improve error handling in statistics health checks
@@ -53,6 +56,20 @@ This file is automatically updated by the release workflow.
 - Merge pull request #1 from tiagobalabuch/docs-and-release-workflow
 - Add in-repo documentation and GitHub Actions release workflow
 - Initial commit: Fabric Warehouse Data Clustering Advisor v0.2.0
+
+## [v1.0.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v1.0.0)
+
+- Merge pull request #10 from tiagobalabuch/bug/smalfix
+- Bump version to 1.0.3 in pyproject.toml
+- Refactor Performance Check Advisor code: clarify data type checks, remove NVARCHAR warnings, and enhance warehouse edition detection logic. Reflected the changes in the documentation
+- Merge pull request #9 from tiagobalabuch/docs/v2-rewrite
+- Update documentation for Data Clustering and Performance Check advisors: fix formatting issues and clarify descriptions.
+- Update documentation for various advisors: clarify report printing behavior, enhance report format descriptions, and correct minor formatting issues.
+- Refactor documentation for advisors: remove unnecessary print statements, clarify row count drift description, and update links in the main index.
+- Refine documentation for Fabric Warehouse Advisor: correct "PySpark" to "Python". Enhance cross-workspace documentation by clarifying sql_endpoint_id usage and updating parameter requirements. Remove outdated troubleshooting section on proactive stats refresh check.
+- Update documentation for Performance Check and Data Clustering advisors, enhancing clarity on severity levels, access requirements, and report formats.
+- Merge pull request #8 from tiagobalabuch/changelog/v1.0.0
+- Update CHANGELOG.md for v1.0.0
 
 ## [v0.3.0](https://github.com/tiagobalabuch/fabric-warehouse-advisor/releases/tag/v0.3.0)
 
