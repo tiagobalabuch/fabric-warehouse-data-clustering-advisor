@@ -9,20 +9,18 @@ its own reports.
 | | Data Clustering | Performance Check |
 |--|----------------|-------------------|
 | **Purpose** | Recommend optimal `CLUSTER BY` columns | Detect performance anti-patterns |
-| **Output model** | Scored recommendations (0–100) | Findings (Critical / Warning / Info) |
+| **Output model** | Scored recommendations (0–100) | Findings (Critical / High / Medium / Low / Info) |
 | **Applies to** | DataWarehouse only | DataWarehouse and Lakehouse SQL Endpoints |
-| **Phases** | 7 (metadata → scoring) | 5 (edition → statistics) |
 | **Config class** | `DataClusteringAdvisorConfig` | `PerformanceCheckConfig` |
 | **Result class** | `AdvisorResult` | `PerformanceCheckResult` |
 | **Reports** | Text, Markdown, HTML | Text, Markdown, HTML |
 | **DDL generation** | Yes (CTAS statements) | Yes (per-finding SQL fixes) |
+| **Phases** | 7 (metadata → scoring) | 7 (edition → statistics) |
+
 
 ## Data Clustering Advisor
 
-Analyses your **actual query patterns** (via Query Insights), combines
-them with **table metadata** and **column cardinality estimates**, and
-scores every candidate column from 0 to 100. You get a clear report
-telling you exactly what to cluster and why.
+Analyses your **actual query patterns** (via Query Insights), combines them with **table metadata** and **column cardinality estimates**, and scores every candidate column from 0 to 100. You get a clear report telling you exactly what to cluster and why.
 
 ```python
 from fabric_warehouse_advisor import DataClusteringAdvisor, DataClusteringAdvisorConfig
@@ -36,9 +34,10 @@ displayHTML(result.html_report)
 
 ## Performance Check Advisor
 
-Scans for common performance pitfalls across **five categories**: warehouse
-edition detection, data-type anti-patterns, caching configuration,
-V-Order optimization state, and statistics health.
+Scans for common performance pitfalls across multiple categories, including warehouse edition detection, data‑type anti‑patterns, caching configuration, collation settings, query regression, statistics health, and V‑Order optimization state.
+
+!!! info "Checking Warehouse edition"
+    Not all checks apply to every warehouse edition.
 
 ```python
 from fabric_warehouse_advisor import PerformanceCheckAdvisor, PerformanceCheckConfig
