@@ -18,7 +18,7 @@ It runs entirely inside a **Fabric Notebook**. The Microsoft Fabric Data Warehou
 ### Option A: Install directly from PyPI (Recommended)
 
 ```python
-%pip install fabric-warehouse-advisor==1.0.3
+%pip install fabric-warehouse-advisor
 ```
 
 For version information, dependencies, and release notes, see the [details](https://pypi.org/project/fabric-warehouse-advisor/).
@@ -45,7 +45,7 @@ python -m build          # produces dist/fabric_warehouse_advisor-1.0.3-py3-none
 ### Option A: Install directly from PyPI (Recommended)
 
 ```python
-%pip install fabric-warehouse-advisor==1.0.3
+%pip install fabric-warehouse-advisor
 ```
 
 ### Option B: Upload the Pre-Built Wheel

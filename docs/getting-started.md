@@ -23,7 +23,7 @@ and running your first analysis.
 ### Option A: Install directly from PyPI (Recommended)
 
 ```python
-%pip install fabric-warehouse-advisor==1.0.3
+%pip install fabric-warehouse-advisor
 ```
 
 For version information, dependencies, and release notes, see the [details](https://pypi.org/project/fabric-warehouse-advisor/).
@@ -57,7 +57,7 @@ You only need the `.whl` file for Fabric.
 Run PIP install 
 
 ```python
-%pip install fabric-warehouse-advisor==1.0.3
+%pip install fabric-warehouse-advisor
 ```
 
 ### Option B: Per-Notebook Install
