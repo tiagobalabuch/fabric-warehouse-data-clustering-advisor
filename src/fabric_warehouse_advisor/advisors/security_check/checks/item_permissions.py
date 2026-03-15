@@ -28,6 +28,9 @@ from typing import Dict, List, Set
 
 from ....core.fabric_rest_client import FabricRestClient, FabricRestError
 from ..config import SecurityCheckConfig
+
+_MAX_DISPLAYED_PRINCIPALS = 10
+
 from ..findings import (
     Finding,
     LEVEL_INFO,
@@ -218,8 +221,8 @@ def check_item_permissions(
                 f"{config.max_item_readdata_principals})."
             ),
             detail=(
-                f"Principals: {', '.join(read_data_principals[:10])}"
-                f"{'…' if len(read_data_principals) > 10 else ''}."
+                f"Principals: {', '.join(read_data_principals[:_MAX_DISPLAYED_PRINCIPALS])}"
+                f"{'…' if len(read_data_principals) > _MAX_DISPLAYED_PRINCIPALS else ''}."
             ),
             recommendation=(
                 "Review item sharing and reduce ReadData grants. "

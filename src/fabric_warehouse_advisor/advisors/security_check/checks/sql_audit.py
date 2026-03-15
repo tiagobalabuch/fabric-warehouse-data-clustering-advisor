@@ -257,19 +257,19 @@ def check_sql_audit(
             ))
 
     # ── Check: unknown groups (future-proofing) ───────────────────
-    unknown = action_groups - _ALL_GROUPS
-    if unknown:
+    unknown_groups = action_groups - _ALL_GROUPS
+    if unknown_groups:
         findings.append(Finding(
             level=LEVEL_INFO,
             category=CATEGORY_SQL_AUDIT,
             check_name="sql_audit_unknown_groups",
             object_name=object_name,
             message=(
-                f"{len(unknown)} unrecognised audit action group(s) "
+                f"{len(unknown_groups)} unrecognised audit action group(s) "
                 f"detected."
             ),
             detail=(
-                f"Groups: {', '.join(sorted(unknown))}. These may be "
+                f"Groups: {', '.join(sorted(unknown_groups))}. These may be "
                 f"new groups added after the advisor was built."
             ),
         ))

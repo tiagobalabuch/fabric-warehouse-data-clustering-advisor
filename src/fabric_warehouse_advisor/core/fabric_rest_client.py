@@ -164,7 +164,7 @@ class FabricRestClient:
             return exc.code, headers, body_bytes
         except URLError as exc:
             raise FabricRestError(
-                f"Network error: {exc.reason}", status_code=0,
+                f"Network error: {str(exc.reason)}", status_code=0,
             ) from exc
 
     # ── GET with retry ────────────────────────────────────────────

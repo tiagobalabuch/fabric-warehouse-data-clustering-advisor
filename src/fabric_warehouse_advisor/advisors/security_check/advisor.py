@@ -378,10 +378,10 @@ class SecurityCheckAdvisor:
             auto_ws = FabricRestClient.get_current_workspace_id(spark)
             if auto_ws:
                 cfg.workspace_id = auto_ws
-                print(f"  \u2139 Auto-detected workspace_id: {auto_ws}")
+                print(f"  ℹ Auto-detected workspace_id: {auto_ws}")
             else:
                 print(
-                    "  \u2139 workspace_id not set and could not be auto-detected.\n"
+                    "  ℹ workspace_id not set and could not be auto-detected.\n"
                     "    Set workspace_id in config to enable REST API checks."
                 )
 
