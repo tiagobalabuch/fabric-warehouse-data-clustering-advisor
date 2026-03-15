@@ -133,22 +133,6 @@ class FabricRestClient:
             return spark.conf.get("trident.artifact.workspace.id")
         except Exception:
             return None
-            # Nothing worked — dump what we can see for debugging
-            attrs = [
-                a for a in dir(ctx)
-                if not a.startswith("_") and "workspace" in a.lower()
-            ]
-            all_attrs = [
-                a for a in dir(ctx)
-                if not a.startswith("_")
-            ][:15]
-            return None, (
-                f"context type={ctx_type}, "
-                f"workspace-related attrs={attrs}, "
-                f"first attrs={all_attrs}"
-            )
-        except Exception as exc:
-            return None, f"exception: {type(exc).__name__}: {exc}"
 
     # ── Low-level HTTP ────────────────────────────────────────────
 
