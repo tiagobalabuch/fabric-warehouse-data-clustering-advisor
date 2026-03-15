@@ -127,7 +127,7 @@ def check_workspace_roles(
             app_id = (
                 principal.get("servicePrincipalDetails", {})
                 .get("aadAppId", "")
-            )
+            ) or "(not available)"
             findings.append(Finding(
                 level=LEVEL_MEDIUM,
                 category=CATEGORY_WORKSPACE_ROLES,

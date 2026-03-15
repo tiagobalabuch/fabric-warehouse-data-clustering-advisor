@@ -31,6 +31,9 @@ from ..config import SecurityCheckConfig
 
 _MAX_DISPLAYED_PRINCIPALS = 10
 
+# Workspace roles that imply Write access to items
+_WRITE_ROLES: Set[str] = {"Admin", "Member", "Contributor"}
+
 from ..findings import (
     Finding,
     LEVEL_INFO,
@@ -134,9 +137,6 @@ def check_item_permissions(
     write_principals: List[str] = []
     reshare_principals: List[str] = []
     all_principals: List[str] = []
-
-    # Workspace roles that imply Write
-    _WRITE_ROLES: Set[str] = {"Admin", "Member", "Contributor"}
 
     for entry in entries:
         principal = entry.get("principal", {})

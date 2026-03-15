@@ -136,6 +136,19 @@ class FabricRestClient:
 
     # ── Low-level HTTP ────────────────────────────────────────────
 
+    @staticmethod
+    def _parse_retry_after(value: str, default: int = 30) -> int:
+        """Parse a Retry-After header value to seconds.
+
+        The HTTP spec allows either an integer (seconds) or an
+        HTTP-date.  We only support the integer form; non-numeric
+        values fall back to *default*.
+        """
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     def _request(
         self,
         url: str,
@@ -185,7 +198,9 @@ class FabricRestClient:
 
             # -- 429 Too Many Requests → respect Retry-After ------
             if status == 429:
-                retry_after = int(headers.get("retry-after", "30"))
+                retry_after = self._parse_retry_after(
+                    headers.get("retry-after", ""), default=30,
+                )
                 if attempt < self._max_retries - 1:
                     self._log(
                         f"  ⚠ HTTP 429 throttled — retrying in "
@@ -304,8 +319,8 @@ class FabricRestClient:
             status, headers, body = self._request(state_url)
 
             if status == 429:
-                retry_after = int(
-                    headers.get("retry-after", str(poll_interval))
+                retry_after = self._parse_retry_after(
+                    headers.get("retry-after", ""), default=poll_interval,
                 )
                 time.sleep(retry_after)
                 continue
@@ -337,8 +352,8 @@ class FabricRestClient:
                 )
 
             # Still running — wait and poll again
-            retry_after = int(
-                headers.get("retry-after", str(poll_interval))
+            retry_after = self._parse_retry_after(
+                headers.get("retry-after", ""), default=poll_interval,
             )
             self._log(
                 f"  ⏳ LRO status: {op_status} — polling in "

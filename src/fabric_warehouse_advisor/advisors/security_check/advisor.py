@@ -533,7 +533,17 @@ class SecurityCheckAdvisor:
         # ================================================================
         if cfg.check_sensitivity_labels and rest_client and cfg.workspace_id:
             wh_info = resolved_warehouse_info
-            # If we didn't resolve earlier, try to fetch now
+            # If warehouse_id was provided manually (not resolved via
+            # list_warehouses), we lack the sensitivityLabel field.
+            # Attempt a fresh resolution; fall back to a minimal dict
+            # which will cause the check to report "no label found."
+            if not wh_info and resolved_warehouse_id:
+                try:
+                    wh_info = rest_client.resolve_warehouse(
+                        cfg.workspace_id, cfg.warehouse_name,
+                    )
+                except FabricRestError:
+                    pass
             if not wh_info and resolved_warehouse_id:
                 wh_info = {"id": resolved_warehouse_id, "displayName": cfg.warehouse_name}
             if wh_info:

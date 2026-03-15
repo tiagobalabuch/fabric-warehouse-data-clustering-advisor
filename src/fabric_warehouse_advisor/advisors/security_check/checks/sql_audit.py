@@ -209,6 +209,8 @@ def check_sql_audit(
 
         if not enabled_in_cat:
             # Entire category uncovered → HIGH
+            # Fallback: if a future category has no recommended flag,
+            # show the first 2 groups as a starting suggestion.
             rec_list = ", ".join(
                 f"{g.name} ({g.description})"
                 for g in cat.groups if g.recommended

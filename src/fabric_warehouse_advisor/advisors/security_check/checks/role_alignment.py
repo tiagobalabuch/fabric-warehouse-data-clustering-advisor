@@ -45,6 +45,8 @@ _DB_PRINCIPALS_QUERY = """
     LEFT JOIN sys.database_principals AS r
         ON drm.role_principal_id = r.principal_id
     WHERE p.type_desc IN ('SQL_USER', 'EXTERNAL_USER', 'EXTERNAL_GROUP')
+      -- Exclude built-in SQL Server system principals that exist in
+      -- every database and should not be compared against workspace roles.
       AND p.name NOT IN ('dbo', 'guest', 'INFORMATION_SCHEMA', 'sys')
 """
 
