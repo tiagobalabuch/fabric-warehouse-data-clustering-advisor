@@ -64,6 +64,14 @@ displayHTML(sc_result.html_report)
 | [Cross-Workspace](cross-workspace.md) | Analysing warehouses in other workspaces |
 | [Troubleshooting](troubleshooting.md) | Common issues and solutions |
 
+## Acknowledgements
+
+Report icons provided by [Flaticon](https://www.flaticon.com/):
+
+- [Cyber security icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/cyber-security)
+- [Performance icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/performance)
+- [Graph icons created by Karacis - Flaticon](https://www.flaticon.com/free-icons/graph)
+
 ## License
 
 MIT — see [LICENSE](https://github.com/tiagobalabuch/fabric-warehouse-advisor/blob/master/LICENSE) for details.

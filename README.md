@@ -145,51 +145,6 @@ transferred to Spark):
 | [Cross-Workspace](docs/cross-workspace.md) | Analysing warehouses in other workspaces |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
 
-## Package Structure
-
-```
-src/fabric_warehouse_advisor/
-├── __init__.py                        # Top-level public API & re-exports
-├── core/
-│   ├── __init__.py
-│   ├── warehouse_reader.py            # Spark connector wrappers for sys views
-│   ├── predicate_parser.py            # SQL text → predicate column extraction
-│   └── report.py                      # save_report() utility
-└── advisors/
-    ├── __init__.py
-    ├── data_clustering/
-    │   ├── __init__.py                # Data Clustering Advisor exports
-    │   ├── config.py                  # DataClusteringConfig dataclass
-    │   ├── advisor.py                 # DataClusteringAdvisor orchestrator
-    │   ├── data_type_support.py       # Data-type eligibility rules
-    │   ├── scoring.py                 # Composite scoring + DDL generation
-    │   └── report.py                  # Text, Markdown & HTML report generators
-    └── performance_check/
-        ├── __init__.py                # Performance Check Advisor exports
-        ├── config.py                  # PerformanceCheckConfig dataclass
-        ├── advisor.py                 # PerformanceCheckAdvisor orchestrator
-        ├── findings.py                # Finding & CheckSummary dataclasses
-        ├── report.py                  # Text, Markdown & HTML report generators
-        └── checks/
-            ├── warehouse_type.py      # Edition detection
-            ├── data_types.py          # Column data-type anti-patterns
-            ├── caching.py             # Result cache & cold start analysis
-            ├── vorder.py              # V-Order optimization state
-            └── statistics.py          # Statistics health & staleness
-    └── security_check/
-        ├── __init__.py                # Security Check Advisor exports
-        ├── config.py                  # SecurityCheckConfig dataclass
-        ├── advisor.py                 # SecurityCheckAdvisor orchestrator
-        ├── findings.py                # Category constants & re-exports
-        ├── report.py                  # Text, Markdown & HTML report generators
-        └── checks/
-            ├── schema_permissions.py  # SEC-001: Schema permission grants
-            ├── custom_roles.py        # SEC-002: Role hygiene
-            ├── row_level_security.py  # SEC-003: RLS coverage
-            ├── column_level_security.py # SEC-004: CLS coverage
-            └── dynamic_data_masking.py # SEC-005: DDM & UNMASK grants
-```
-
 ## Acknowledgements
 
 Report icons provided by [Flaticon](https://www.flaticon.com/):
