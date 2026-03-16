@@ -190,6 +190,14 @@ src/fabric_warehouse_advisor/
             └── dynamic_data_masking.py # SEC-005: DDM & UNMASK grants
 ```
 
+## Acknowledgements
+
+Report icons provided by [Flaticon](https://www.flaticon.com/):
+
+- [Cyber security icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/cyber-security)
+- [Performance icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/performance)
+- [Graph icons created by Karacis - Flaticon](https://www.flaticon.com/free-icons/graph)
+
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
