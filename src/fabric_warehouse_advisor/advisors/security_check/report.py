@@ -70,6 +70,14 @@ _LEVEL_ICONS = {
 }
 
 
+def _edition_label(edition: str | None, *, capitalize: bool = True) -> str:
+    """Return 'SQL Endpoint' or 'Warehouse' based on warehouse edition."""
+    is_sql_endpoint = edition and edition != "DataWarehouse"
+    if capitalize:
+        return "SQL Endpoint" if is_sql_endpoint else "Warehouse"
+    return "SQL endpoint" if is_sql_endpoint else "warehouse"
+
+
 # ======================================================================
 # TEXT REPORT
 # ======================================================================
@@ -78,7 +86,7 @@ def generate_text_report(summary: CheckSummary) -> str:
     """Generate a plain-text report with Unicode box drawing."""
     lines: List[str] = []
     w = 72
-    item = "SQL Endpoint" if summary.warehouse_edition and summary.warehouse_edition != "DataWarehouse" else "Warehouse"
+    item = _edition_label(summary.warehouse_edition)
 
     lines.append("╔" + "═" * w + "╗")
     lines.append("║" + " Fabric Warehouse Security Check Report".center(w) + "║")
@@ -160,10 +168,10 @@ def generate_markdown_report(summary: CheckSummary) -> str:
 
     lines.append("# 🔒 Fabric Warehouse Security Check Report")
     lines.append("")
-    item_md = "SQL Endpoint" if summary.warehouse_edition and summary.warehouse_edition != "DataWarehouse" else "Warehouse"
+    item = _edition_label(summary.warehouse_edition)
     lines.append(f"| Property | Value |")
     lines.append(f"|----------|-------| ")
-    lines.append(f"| {item_md} | `{summary.warehouse_name}` |")
+    lines.append(f"| {item} | `{summary.warehouse_name}` |")
     lines.append("")
 
     # Summary
@@ -276,7 +284,7 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
     tabs = [(f"pane-{idx}", label) for idx, (_cat, label) in enumerate(active_cats)]
 
     # Determine badge label based on edition
-    badge_label = "SQL Endpoint" if summary.warehouse_edition and summary.warehouse_edition != "DataWarehouse" else "Warehouse"
+    badge_label = _edition_label(summary.warehouse_edition)
 
     # ── Sidebar ─────────────────────────────────────────────────
     h.append(render_sidebar(
@@ -288,7 +296,7 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         badge_label=badge_label,
     ))
 
-    item = "SQL endpoint" if summary.warehouse_edition and summary.warehouse_edition != "DataWarehouse" else "warehouse"
+    item = _edition_label(summary.warehouse_edition, capitalize=False)
 
     # ── Main content ────────────────────────────────────────────────
     h.append(render_main_open(

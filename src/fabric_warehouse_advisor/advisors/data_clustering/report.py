@@ -605,7 +605,7 @@ def generate_html_report(
         h.append(
             f'<div class="warn-box" style="border-left-color:var(--primary);">'
             f'{_ICON_BULB} Fabric uses '
-            '<code>Create Table \u2026 As Select</code> (CTAS) to apply data '
+            '<code>CREATE TABLE ... AS SELECT</code> (CTAS) to apply data '
             'clustering. Each statement creates a <b>new</b> clustered '
             'table. Pick the column(s) that best suit your workload, then '
             'drop the original table and rename the new one.</div>'
