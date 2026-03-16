@@ -11,6 +11,15 @@ system or displayed inside a Fabric notebook via ``displayHTML()``.
 
 from __future__ import annotations
 
+from .icon_data import (
+    ICON_CLUSTERING,
+    ICON_MOON,
+    ICON_PERFORMANCE,
+    ICON_SEARCH,
+    ICON_SECURITY,
+    ICON_SUN,
+)
+
 
 # ── HTML escape ─────────────────────────────────────────────────────
 
@@ -136,9 +145,18 @@ REPORT_CSS = r"""<style>
     letter-spacing: -0.3px;
   }
   .brand-icon {
-    font-size: 22px;
     margin-right: 10px;
     flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .brand-icon img {
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 
   /* Warehouse badge — prominent in sidebar */
@@ -248,7 +266,11 @@ REPORT_CSS = r"""<style>
   .search-input:focus { box-shadow: 0 0 0 2px var(--primary); }
   .search-icon {
     position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-    color: var(--text-muted); pointer-events: none; font-size: 13px;
+    pointer-events: none; width: 14px; height: 14px;
+  }
+  .search-icon img {
+    width: 100%; height: 100%; display: block;
+    opacity: 0.5;
   }
 
   .theme-toggle {
@@ -574,23 +596,23 @@ document.addEventListener('DOMContentLoaded', function() {
   var themeBtn = document.getElementById('theme-toggle');
   var root = document.documentElement;
   if (themeBtn) {
-    var iconSpan = themeBtn.querySelector('.icon');
+    var themeImg = document.getElementById('theme-icon');
     var saved = null;
     try { saved = localStorage.getItem('fwa-theme'); } catch(e) {}
     var prefersDark = window.matchMedia &&
       window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (saved === 'dark' || (!saved && prefersDark)) {
       root.classList.add('dark');
-      if (iconSpan) iconSpan.textContent = '\u2600\ufe0f';
+      if (themeImg) themeImg.src = themeImg.dataset.dark;
     } else {
-      if (iconSpan) iconSpan.textContent = '\ud83c\udf19';
+      if (themeImg) themeImg.src = themeImg.dataset.light;
     }
     themeBtn.addEventListener('click', function() {
       themeBtn.classList.add('rotating');
       root.classList.toggle('dark');
       var isDark = root.classList.contains('dark');
       try { localStorage.setItem('fwa-theme', isDark ? 'dark' : 'light'); } catch(e) {}
-      if (iconSpan) iconSpan.textContent = isDark ? '\u2600\ufe0f' : '\ud83c\udf19';
+      if (themeImg) themeImg.src = isDark ? themeImg.dataset.dark : themeImg.dataset.light;
       setTimeout(function() { themeBtn.classList.remove('rotating'); }, 400);
     });
   }
@@ -769,9 +791,9 @@ document.addEventListener('DOMContentLoaded', function() {
 # ══════════════════════════════════════════════════════════════════════
 
 REPORT_ICONS = {
-    "security": "\U0001f6e1\ufe0f",   # 🛡️
-    "performance": "\u26a1",           # ⚡
-    "clustering": "\U0001f4ca",        # 📊
+    "security": f'<img src="{ICON_SECURITY}" width="28" height="28" alt="">',
+    "performance": f'<img src="{ICON_PERFORMANCE}" width="28" height="28" alt="">',
+    "clustering": f'<img src="{ICON_CLUSTERING}" width="28" height="28" alt="">',
 }
 
 
@@ -882,14 +904,18 @@ def render_main_open(
     if show_search:
         parts += [
             '<div class="search-wrapper">',
-            '<span class="search-icon">\U0001f50d</span>',
+            f'<span class="search-icon"><img src="{ICON_SEARCH}" alt=""></span>',
             '<input type="text" class="search-input" id="global-search"'
             ' placeholder="Search rules, objects, findings\u2026">',
             '</div>',
         ]
     parts += [
-        '<button id="theme-toggle" class="theme-toggle" '
-        'aria-label="Toggle Theme"><span class="icon">\U0001f319</span></button>',
+        f'<button id="theme-toggle" class="theme-toggle" '
+        f'aria-label="Toggle Theme"><span class="icon">'
+        f'<img id="theme-icon" src="{ICON_MOON}" '
+        f'data-light="{ICON_MOON}" data-dark="{ICON_SUN}" '
+        f'width="20" height="20" alt="">'
+        f'</span></button>',
         '</div>',  # controls-area
         '</header>',
     ]
