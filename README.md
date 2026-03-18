@@ -9,7 +9,7 @@ produces scored recommendations with rich reports.
   | Advisor | What it does | Output |
   |---------|-------------|--------|
   | [**Data Clustering**](https://tiagobalabuch.github.io/fabric-warehouse-advisor/advisors/data-clustering/) | Recommends which tables and columns should use `CLUSTER BY` | Scored recommendations (0–100) with CTAS DDL |
-  | [**Performance Check**](https://tiagobalabuch.github.io/fabric-warehouse-advisor/advisors/performance-check/) | Detects data-type, query regression, caching misconfigurations, V-Order status, and statistics health problems | Findings (Critical / Warning / Info) |
+  | [**Performance Check**](https://tiagobalabuch.github.io/fabric-warehouse-advisor/advisors/performance-check/) | Detects data-type, query regression, caching misconfigurations, V-Order status, and statistics health problems | Findings (Critical / High / Medium / Low / Info) |
   | [**Security Check**](https://tiagobalabuch.github.io/fabric-warehouse-advisor/advisors/security-check/) | Analyses permissions, roles, RLS, CLS, and Dynamic Data Masking configuration | Findings (Critical / High / Medium / Low / Info) |
 
 It runs entirely inside a **Fabric Notebook**. The Microsoft Fabric Data Warehouse connector comes pre-installed in the Fabric runtime, and Query Insights is enabled by default on every warehouse. A Lakehouse is required only when the solution is installed from a wheel file stored in OneLake.

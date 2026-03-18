@@ -665,7 +665,8 @@ class SecurityCheckAdvisor:
 
         print("\n\u2713 Security Check Advisor completed successfully.")
         print("  Use  displayHTML(result.html_report)  for a rich HTML view.")
-        print("  Use  result.save('path.html')  to save the report to a file.")
+        print("  Use  result.save('report.html')  to save as HTML (default).")
+        print("  Other formats: result.save('report.md', format='md') or result.save('report.txt', format='txt')")
 
         return SecurityCheckResult(
             findings=all_findings,
