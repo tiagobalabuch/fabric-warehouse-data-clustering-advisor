@@ -102,7 +102,10 @@ jobs:
               PR_NUM=$(echo "$LINE" | grep -oP 'Merge pull request #\K[0-9]+')
 
               if [ -n "$PR_NUM" ]; then
-                PR_INFO=$(gh pr view "$PR_NUM" --repo "$REPO" --json title,labels 2>/dev/null || echo '{}')
+                PR_INFO=$(gh pr view "$PR_NUM" --repo "$REPO" --json title,labels 2>&1) || {
+                  echo "::warning::Failed to fetch PR #$PR_NUM: $PR_INFO" >&2
+                  PR_INFO='{}'
+                }
                 PR_TITLE=$(echo "$PR_INFO" | jq -r '.title // empty' 2>/dev/null)
                 [ -z "$PR_TITLE" ] && PR_TITLE="$LINE"
 
