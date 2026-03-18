@@ -418,26 +418,17 @@ class PerformanceCheckAdvisor:
 
         _total_elapsed = time.perf_counter() - _run_start
 
-        # Print summary
-        print()
-        print("═" * 52)
-        print(f"  SUMMARY")
-        print(f"  Edition   : {edition}")
-        print(f"  CRITICAL  : {summary.critical_count}")
-        print(f"  HIGH      : {summary.high_count}")
-        print(f"  MEDIUM    : {summary.medium_count}")
-        print(f"  LOW       : {summary.low_count}")
-        print(f"  INFO      : {summary.info_count}")
-        print(f"  Total     : {len(all_findings)} findings")
-        print("═" * 52)
-        print()
-
         # Phase timings (verbose only)
         if cfg.verbose:
             self._log("Phase Timings:")
             for phase, elapsed in _phase_timings.items():
                 self._log(f"  {phase:<40} {elapsed:.2f}s")
             self._log(f"  {'Total':<40} {_total_elapsed:.2f}s")
+
+        print("\n\u2713 Performance Check Advisor completed successfully.")
+        print("  Use  displayHTML(result.html_report)  for a rich HTML view.")
+        print("  Use  result.save('report.html')  to save as HTML (default).")
+        print("  Other formats: result.save('report.md', format='md') or result.save('report.txt', format='txt')")
 
         return PerformanceCheckResult(
             findings=all_findings,
