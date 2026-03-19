@@ -261,13 +261,16 @@ class PhaseTracker:
         total_elapsed: float | None = None,
         show_pct: bool = False,
     ) -> None:
-        """Print the phase timings summary.
+        """Print the phase summary.
+
+        When *verbose* is ``True``, a compact summary table is printed
+        showing each phase's timing, finding counts, and overall totals.
+        When *verbose* is ``False``, nothing is printed.
 
         Parameters
         ----------
         verbose : bool
-            If ``False``, nothing is printed (matches existing
-            behaviour where timings are verbose-only).
+            If ``True``, print the phase summary table.
         total_elapsed : float, optional
             Override for total run time.  If not given, the sum of
             individual phase elapsed times is used.
@@ -280,40 +283,75 @@ class PhaseTracker:
 
         _total = total_elapsed if total_elapsed is not None else self.total_elapsed
         name_width = 40
-        elapsed_width = 8
 
-        if show_pct:
-            print()
-            print("═" * 60)
-            print("  ⏱ Timing Summary")
-            print("═" * 60)
-            pct_width = 7
-            for p in self._phases:
-                pct = (p.elapsed / _total * 100) if _total > 0 else 0
-                print(
-                    f"  {p.name:<35} "
-                    f"{p.elapsed:>8.2f}s  ({pct:>5.1f}%)"
-                )
-            sep = "─"
-            print(f"  {sep * 35} {sep * 8}  {sep * 7}")
-            print(f"  {'Total':<35} {_total:>8.2f}s")
-            print("═" * 60)
-        else:
-            print("Phase Timings:")
-            for p in self._phases:
-                if p.is_skipped:
-                    label = p.name
-                    if p.note:
-                        label = f"{p.name} ({p.note})"
-                    print(f"  {label:<{name_width}} SKIPPED")
-                elif p.is_failed:
-                    label = p.name
-                    if p.note:
-                        label = f"{p.name} ({p.note})"
-                    print(f"  {label:<{name_width}} FAILED")
-                else:
-                    label = p.name
-                    if p.note:
-                        label = f"{p.name} ({p.note})"
-                    print(f"  {label:<{name_width}} {p.elapsed:.2f}s")
-            print(f"  {'Total':<{name_width}} {_total:.2f}s")
+        self._print_compact_summary(_total, name_width, show_pct=show_pct)
+
+    # -- compact summary (always visible) --
+
+    def _print_compact_summary(
+        self,
+        total_elapsed: float,
+        name_width: int = 40,
+        show_pct: bool = False,
+    ) -> None:
+        """Print a concise phase summary table — verbose only."""
+        sep = "─"
+        print()
+        print(f"  {sep * 58}")
+        print("  Phase Summary")
+        print(f"  {sep * 58}")
+
+        for p in self._phases:
+            label = p.name
+            if p.note:
+                label = f"{p.name} ({p.note})"
+
+            if p.is_skipped:
+                reason = f"SKIPPED ({p.skip_reason})" if p.skip_reason else "SKIPPED"
+                print(f"  {label:<{name_width}} {reason}")
+            elif p.is_failed:
+                reason = f"FAILED ({p.skip_reason})" if p.skip_reason else "FAILED"
+                print(f"  {label:<{name_width}} {reason}")
+            else:
+                # Elapsed + pct (optional) + finding counts on the same line
+                pct_str = ""
+                if show_pct and total_elapsed > 0:
+                    pct = p.elapsed / total_elapsed * 100
+                    pct_str = f"  ({pct:>5.1f}%)"
+                parts = [f"{p.elapsed:.2f}s{pct_str}"]
+                counts = p.finding_counts
+                finding_parts = []
+                for level in ("critical", "high", "medium", "low", "info"):
+                    n = counts[level]
+                    if n > 0:
+                        finding_parts.append(f"{n} {level}")
+                if finding_parts:
+                    parts.append(", ".join(finding_parts))
+                print(f"  {label:<{name_width}} {'   '.join(parts)}")
+
+        # Footer totals
+        print(f"  {sep * 58}")
+        status_parts = [f"{len(self._phases)} phases"]
+        if self.failed_count:
+            status_parts.append(f"{self.failed_count} failed")
+        if self.skipped_count:
+            status_parts.append(f"{self.skipped_count} skipped")
+
+        # Aggregate finding counts across all phases
+        all_counts: dict[str, int] = {
+            "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0,
+        }
+        for p in self._phases:
+            for level, n in p.finding_counts.items():
+                all_counts[level] += n
+        finding_parts = []
+        for level in ("critical", "high", "medium", "low", "info"):
+            n = all_counts[level]
+            if n > 0:
+                finding_parts.append(f"{n} {level}")
+
+        summary_line = f"Total: {total_elapsed:.2f}s | {' | '.join(status_parts)}"
+        if finding_parts:
+            summary_line += f" | {', '.join(finding_parts)}"
+        print(f"  {summary_line}")
+        print(f"  {sep * 58}")
