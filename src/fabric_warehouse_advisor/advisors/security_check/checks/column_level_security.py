@@ -135,6 +135,11 @@ def check_column_level_security(
         table = r["table_name"]
         col = r["column_name"]
 
+        # Apply schema_names filter
+        if config.schema_names:
+            if schema.lower() not in [s.lower() for s in config.schema_names]:
+                continue
+
         # Apply table_names filter
         if config.table_names:
             qualified = f"{schema}.{table}"

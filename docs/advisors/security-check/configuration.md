@@ -31,11 +31,18 @@ result = advisor.run()
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `table_names` | `list[str]` | `[]` | Restrict RLS and CLS analysis to specific tables. Each entry can be `"table_name"` (any schema) or `"schema.table_name"`. Empty = all tables. |
+| `schema_names` | `list[str]` | `[]` | Restrict analysis to specific schemas. Empty = all user schemas. |
+| `table_names` | `list[str]` | `[]` | Restrict RLS, CLS, and DDM analysis to specific tables. Each entry can be `"table_name"` (any schema) or `"schema.table_name"`. Empty = all tables. |
 
-Example:
+Examples:
 
 ```python
+# Only check tables in the 'sales' schema
+config = SecurityCheckConfig(
+    warehouse_name="MyWarehouse",
+    schema_names=["sales"],
+)
+
 # Only check specific tables for RLS / CLS coverage
 config = SecurityCheckConfig(
     warehouse_name="MyWarehouse",

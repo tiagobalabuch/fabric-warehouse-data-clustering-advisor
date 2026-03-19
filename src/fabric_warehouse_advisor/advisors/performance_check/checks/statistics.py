@@ -99,6 +99,7 @@ def check_statistics(
     warehouse: str,
     config: PerformanceCheckConfig,
     row_counts: Dict[Tuple[str, str], int] | None = None,
+    skip_table_checks: bool = False,
 ) -> List[Finding]:
     """Analyse statistics health across all user tables.
 
@@ -107,6 +108,9 @@ def check_statistics(
     row_counts : dict, optional
         Pre-computed ``(schema, table) -> row_count``. If not provided,
         row counts are fetched from ``sys.partitions``.
+    skip_table_checks : bool
+        When ``True`` only warehouse-level config checks are run; the
+        per-table analysis (staleness, drift, missing stats) is skipped.
 
     Returns
     -------
@@ -115,14 +119,15 @@ def check_statistics(
     """
     findings: List[Finding] = []
 
-    # --- Database-level settings ---
+    # --- Database-level settings (always run) ---
     findings.extend(_check_stats_config(spark, warehouse, config))
 
     if config.proactive_refresh_check:
         findings.extend(_check_proactive_refresh(spark, warehouse, config))
 
     # --- Per-table statistics analysis ---
-    findings.extend(_check_stats_health(spark, warehouse, config, row_counts))
+    if not skip_table_checks:
+        findings.extend(_check_stats_health(spark, warehouse, config, row_counts))
 
     return findings
 
@@ -483,6 +488,18 @@ def _check_stats_health(
     # --- Tables without any statistics ---
     if config.tables_without_stats_check:
         all_tables = set(row_counts.keys()) if row_counts else set()
+        # Apply scope filters so we only flag tables in the requested scope
+        if config.schema_names:
+            _schema_set = {s.lower() for s in config.schema_names}
+            all_tables = {
+                (s, t) for s, t in all_tables
+                if s.lower() in _schema_set
+            }
+        if config.table_names:
+            all_tables = {
+                (s, t) for s, t in all_tables
+                if _matches_table_filter(s, t, config.table_names)
+            }
         tables_no_stats = all_tables - tables_with_stats
         for (schema, table) in tables_no_stats:
             rc = row_counts.get((schema, table), 0) if row_counts else 0
@@ -515,10 +532,47 @@ def _fetch_row_counts(
     warehouse: str,
     config: PerformanceCheckConfig,
 ) -> Dict[Tuple[str, str], int]:
-    """Fetch actual row counts via the shared warehouse_reader helper."""
+    """Fetch actual row counts via the shared warehouse_reader helper.
+
+    When ``schema_names`` or ``table_names`` are configured, a filtered
+    table list is built first so that only in-scope tables are counted
+    (avoiding expensive per-table ``COUNT_BIG(*)`` round-trips for
+    tables outside the requested scope).
+    """
     try:
+        full_metadata = None
+
+        if config.schema_names or config.table_names:
+            _tbl_query = (
+                "SELECT SCHEMA_NAME(schema_id) AS schema_name, "
+                "name AS table_name FROM sys.tables WHERE type = 'U'"
+            )
+            _tbl_rows = read_warehouse_query(
+                spark, warehouse, _tbl_query,
+                config.workspace_id, config.warehouse_id,
+            ).collect()
+            _filtered: List[Tuple[str, str]] = []
+            for r in _tbl_rows:
+                s, t = r["schema_name"], r["table_name"]
+                if config.schema_names:
+                    if s.lower() not in [x.lower() for x in config.schema_names]:
+                        continue
+                if config.table_names:
+                    if not _matches_table_filter(s, t, config.table_names):
+                        continue
+                _filtered.append((s, t))
+            if not _filtered:
+                return {}
+            from pyspark.sql.types import StructType, StructField, StringType
+            _schema = StructType([
+                StructField("schema_name", StringType(), False),
+                StructField("table_name", StringType(), False),
+            ])
+            full_metadata = spark.createDataFrame(_filtered, _schema)
+
         rc_df = get_table_row_counts(
             spark, warehouse,
+            full_metadata=full_metadata,
             workspace_id=config.workspace_id,
             warehouse_id=config.warehouse_id,
             verbose=config.verbose,

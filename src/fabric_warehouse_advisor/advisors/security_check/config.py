@@ -84,6 +84,10 @@ class SecurityCheckConfig:
         Flag ``default()`` masking on short string columns where the
         mask may be trivially reversible.
 
+    schema_names : list[str]
+        Optional list of schemas to restrict analysis to.
+        Empty means all user schemas.
+
     table_names : list[str]
         Optional list of tables to restrict analysis to.  Each entry
         can be ``"table_name"`` (any schema) or ``"schema.table_name"``.
@@ -162,6 +166,7 @@ class SecurityCheckConfig:
     check_role_alignment: bool = True
 
     # -- Scope filtering --
+    schema_names: list[str] = field(default_factory=list)
     table_names: list[str] = field(default_factory=list)
 
     # -- Output --

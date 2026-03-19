@@ -108,6 +108,7 @@ def check_collation(
         return findings
 
     mismatch_count = 0
+    columns_in_scope = 0
 
     for row in col_rows:
         schema = row["schema_name"]
@@ -122,6 +123,8 @@ def check_collation(
         if config.table_names:
             if not _matches_table_filter(schema, table, config.table_names):
                 continue
+
+        columns_in_scope += 1
 
         if col_collation and col_collation != db_collation:
             mismatch_count += 1
@@ -153,7 +156,15 @@ def check_collation(
                 ),
             ))
 
-    if mismatch_count == 0:
+    if columns_in_scope == 0 and (config.schema_names or config.table_names):
+        findings.append(Finding(
+            level=LEVEL_INFO,
+            category=CATEGORY_COLLATION,
+            check_name="collation_check_skipped",
+            object_name=warehouse,
+            message="No tables match the configured scope filters — collation check skipped.",
+        ))
+    elif mismatch_count == 0:
         findings.append(Finding(
             level=LEVEL_INFO,
             category=CATEGORY_COLLATION,

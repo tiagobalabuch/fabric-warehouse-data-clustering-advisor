@@ -102,6 +102,10 @@ class DataClusteringConfig:
         Leave empty (the default) to analyse every table that meets
         the ``min_row_count`` threshold.
 
+    schema_names : list[str]
+        Optional list of schemas to restrict analysis to.
+        Empty means all user schemas.
+
     verbose : bool
         If ``True``, display intermediate DataFrames for debugging.
 
@@ -140,7 +144,8 @@ class DataClusteringConfig:
     min_recommendation_score: int = 40
     generate_ctas: bool = False
 
-    # -- Table filter --
+    # -- Scope filtering --
+    schema_names: list[str] = field(default_factory=list)
     table_names: list[str] = field(default_factory=list)
 
     # -- Output --

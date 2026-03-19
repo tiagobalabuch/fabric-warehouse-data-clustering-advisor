@@ -43,6 +43,7 @@ from .report import (
     generate_html_report,
 )
 from ...core.report import save_report
+from ...core.warehouse_reader import read_warehouse_query
 
 
 # ------------------------------------------------------------------
@@ -300,12 +301,118 @@ class PerformanceCheckAdvisor:
         self._log_findings_detail(edition_findings)
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
+
         # ================================================================
-        # Phase 1: Data Type Analysis
+        # Phase 1: Caching Analysis  (warehouse-level)
         # ================================================================
-        if cfg.check_data_types:
+        if cfg.check_caching:
+            findings, elapsed = self._run_phase(
+                "Phase 1: Analysing caching configuration",
+                check_caching, spark, cfg.warehouse_name, cfg,
+            )
+            all_findings.extend(findings)
+            _phase_timings["Phase 1: Caching"] = elapsed
+        else:
+            self._log("Phase 1: Caching analysis — SKIPPED (disabled in config)")
+            _phase_timings["Phase 1: Caching"] = "SKIPPED"
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 2: V-Order Check  (warehouse-level)
+        # ================================================================
+        if cfg.check_vorder:
+            findings, elapsed = self._run_phase(
+                "Phase 2: Checking V-Order optimization",
+                check_vorder, spark, cfg.warehouse_name, cfg,
+                edition=edition,
+            )
+            all_findings.extend(findings)
+            _phase_timings["Phase 2: V-Order"] = elapsed
+        else:
+            self._log("Phase 2: V-Order check — SKIPPED (disabled in config)")
+            _phase_timings["Phase 2: V-Order"] = "SKIPPED"
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 3: Query Regression Detection  (warehouse-level)
+        # ================================================================
+        if cfg.check_query_regression:
+            findings, elapsed = self._run_phase(
+                "Phase 3: Detecting query regressions",
+                check_query_regression, spark, cfg.warehouse_name, cfg,
+            )
+            all_findings.extend(findings)
+            _phase_timings["Phase 3: Query regression"] = elapsed
+        else:
+            self._log("Phase 3: Query regression — SKIPPED (disabled in config)")
+            _phase_timings["Phase 3: Query regression"] = "SKIPPED"
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Scope resolution: when schema_names or table_names are set,
+        # check whether any user tables actually match.  If none do,
+        # skip the table-scoped checks (data types, statistics,
+        # collation) to avoid unnecessary SQL round-trips.
+        # ================================================================
+        _any_table_checks = (
+            cfg.check_data_types or cfg.check_statistics or cfg.check_collation
+        )
+        _has_scope_filter = bool(cfg.schema_names or cfg.table_names)
+        _skip_table_checks = False
+
+        if _any_table_checks and _has_scope_filter:
             _t0 = time.perf_counter()
-            print("Phase 1: Analysing data types ...")
+            try:
+                _tbl_df = read_warehouse_query(
+                    spark, cfg.warehouse_name,
+                    "SELECT SCHEMA_NAME(schema_id) AS schema_name, "
+                    "name AS table_name FROM sys.objects WHERE type = 'U'",
+                    cfg.workspace_id, cfg.warehouse_id,
+                )
+                _tbl_rows = _tbl_df.collect()
+                _matched = set()
+                for r in _tbl_rows:
+                    s, t = r["schema_name"], r["table_name"]
+                    if cfg.schema_names:
+                        if s.lower() not in [x.lower() for x in cfg.schema_names]:
+                            continue
+                    if cfg.table_names:
+                        qualified = f"{s}.{t}"
+                        if not any(
+                            x == t or x == qualified
+                            for x in cfg.table_names
+                        ):
+                            continue
+                    _matched.add((s, t))
+                if not _matched:
+                    _skip_table_checks = True
+                    scope_parts = []
+                    if cfg.schema_names:
+                        scope_parts.append(f"schema_names={cfg.schema_names}")
+                    if cfg.table_names:
+                        scope_parts.append(f"table_names={cfg.table_names}")
+                    scope_msg = ", ".join(scope_parts)
+                    print(
+                        f"  ℹ No tables match the configured scope ({scope_msg}).\n"
+                        f"    Skipping table-scoped checks (Data Types, Statistics, Collation)."
+                    )
+                else:
+                    self._log(f"  Scope resolved: {len(_matched)} table(s) match filters.")
+            except Exception:
+                pass  # If scope query fails, run the checks normally
+            self._log(f"  ⏱ Scope resolution in {time.perf_counter() - _t0:.2f}s")
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 4: Data Type Analysis  (table-scoped)
+        # ================================================================
+        if cfg.check_data_types and not _skip_table_checks:
+            _t0 = time.perf_counter()
+            print("Phase 4: Analysing data types ...")
             dt_findings, dt_tables, dt_columns = check_data_types(
                 spark, cfg.warehouse_name, cfg,
             )
@@ -320,81 +427,56 @@ class PerformanceCheckAdvisor:
             self._log(f"  Tables: {dt_tables} | Columns: {dt_columns}")
             self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
             self._log_findings_detail(dt_findings)
-            _phase_timings["Phase 1: Data types"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 1 completed in {_phase_timings['Phase 1: Data types']:.2f}s")
+            _phase_timings["Phase 4: Data types"] = time.perf_counter() - _t0
+            self._log(f"  ⏱ Phase 4 completed in {_phase_timings['Phase 4: Data types']:.2f}s")
+        elif not cfg.check_data_types:
+            self._log("Phase 4: Data type analysis — SKIPPED (disabled in config)")
+            _phase_timings["Phase 4: Data types"] = "SKIPPED"
         else:
-            self._log("Phase 1: Data type analysis — SKIPPED (disabled in config)")
+            self._log("Phase 4: Data type analysis — SKIPPED (no tables in scope)")
+            _phase_timings["Phase 4: Data types"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
+
         # ================================================================
-        # Phase 2: Caching Analysis
-        # ================================================================
-        if cfg.check_caching:
-            findings, elapsed = self._run_phase(
-                "Phase 2: Analysing caching configuration",
-                check_caching, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(findings)
-            _phase_timings["Phase 2: Caching"] = elapsed
-        else:
-            self._log("Phase 2: Caching analysis — SKIPPED (disabled in config)")
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-        # ================================================================
-        # Phase 3: V-Order Check
-        # ================================================================
-        if cfg.check_vorder:
-            findings, elapsed = self._run_phase(
-                "Phase 3: Checking V-Order optimization",
-                check_vorder, spark, cfg.warehouse_name, cfg,
-                edition=edition,
-            )
-            all_findings.extend(findings)
-            _phase_timings["Phase 3: V-Order"] = elapsed
-        else:
-            self._log("Phase 3: V-Order check — SKIPPED (disabled in config)")
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-        # ================================================================
-        # Phase 4: Statistics Health
+        # Phase 5: Statistics Health  (table-scoped per-table analysis;
+        #           warehouse-level config checks always run)
         # ================================================================
         if cfg.check_statistics:
+            _stats_label = (
+                "Phase 5: Analysing statistics health (config only — no tables in scope)"
+                if _skip_table_checks
+                else "Phase 5: Analysing statistics health"
+            )
             findings, elapsed = self._run_phase(
-                "Phase 4: Analysing statistics health",
+                _stats_label,
                 check_statistics, spark, cfg.warehouse_name, cfg,
+                skip_table_checks=_skip_table_checks,
             )
             all_findings.extend(findings)
-            _phase_timings["Phase 4: Statistics"] = elapsed
+            _phase_timings["Phase 5: Statistics"] = elapsed
         else:
-            self._log("Phase 4: Statistics health — SKIPPED (disabled in config)")
+            self._log("Phase 5: Statistics health — SKIPPED (disabled in config)")
+            _phase_timings["Phase 5: Statistics"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
+
         # ================================================================
-        # Phase 5: Collation Mismatch
+        # Phase 6: Collation Mismatch  (table-scoped)
         # ================================================================
-        if cfg.check_collation:
+        if cfg.check_collation and not _skip_table_checks:
             findings, elapsed = self._run_phase(
-                "Phase 5: Checking collation consistency",
+                "Phase 6: Checking collation consistency",
                 check_collation, spark, cfg.warehouse_name, cfg,
             )
             all_findings.extend(findings)
-            _phase_timings["Phase 5: Collation"] = elapsed
+            _phase_timings["Phase 6: Collation"] = elapsed
+        elif not cfg.check_collation:
+            self._log("Phase 6: Collation check — SKIPPED (disabled in config)")
+            _phase_timings["Phase 6: Collation"] = "SKIPPED"
         else:
-            self._log("Phase 5: Collation check — SKIPPED (disabled in config)")
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-        # ================================================================
-        # Phase 6: Query Regression Detection
-        # ================================================================
-        if cfg.check_query_regression:
-            findings, elapsed = self._run_phase(
-                "Phase 6: Detecting query regressions",
-                check_query_regression, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(findings)
-            _phase_timings["Phase 6: Query regression"] = elapsed
-        else:
-            self._log("Phase 6: Query regression — SKIPPED (disabled in config)")
+            self._log("Phase 6: Collation check — SKIPPED (no tables in scope)")
+            _phase_timings["Phase 6: Collation"] = "SKIPPED"
 
         # ================================================================
         # Build summary and reports
@@ -422,7 +504,10 @@ class PerformanceCheckAdvisor:
         if cfg.verbose:
             self._log("Phase Timings:")
             for phase, elapsed in _phase_timings.items():
-                self._log(f"  {phase:<40} {elapsed:.2f}s")
+                if isinstance(elapsed, str):
+                    self._log(f"  {phase:<40} {elapsed}")
+                else:
+                    self._log(f"  {phase:<40} {elapsed:.2f}s")
             self._log(f"  {'Total':<40} {_total_elapsed:.2f}s")
 
         print("\n\u2713 Performance Check Advisor completed successfully.")
