@@ -253,6 +253,7 @@ class DataClusteringAdvisor:
 
         # Verbose: show active configuration
         self._log_header("Configuration")
+        self._log_kv("Schemas filter", cfg.schema_names or "(all)")
         self._log_kv("Tables filter", cfg.table_names or "(all)")
         self._log_kv("min_row_count", f"{cfg.min_row_count:,}")
         self._log_kv("large_table_rows", f"{cfg.large_table_rows:,}")
@@ -301,6 +302,14 @@ class DataClusteringAdvisor:
             spark, cfg.warehouse_name, cfg.workspace_id, cfg.warehouse_id
         )
 
+        # Apply schema_names filter
+        _schema_set = {s.lower() for s in cfg.schema_names} if cfg.schema_names else set()
+        if _schema_set:
+            full_metadata = full_metadata.filter(
+                F.lower(F.col("schema_name")).isin(_schema_set)
+            )
+            self._log(f"  Filtered to schema(s): {cfg.schema_names}")
+
         # Build reusable filter condition when table_names is specified
         _table_filter = None
         if cfg.table_names:
@@ -326,6 +335,40 @@ class DataClusteringAdvisor:
         _phase_timings["Phase 1: Metadata"] = time.perf_counter() - _phase_start
         self._log(f"  \u23f1 Phase 1 completed in {_phase_timings['Phase 1: Metadata']:.2f}s")
 
+        # Early exit: if no tables match the scope filters, skip all
+        # remaining phases (avoids unnecessary Spark/SQL round-trips).
+        _table_count = (
+            full_metadata.select("schema_name", "table_name")
+            .distinct()
+            .count()
+        )
+        if _table_count == 0:
+            _total_elapsed = time.perf_counter() - _run_start
+            scope_parts = []
+            if cfg.schema_names:
+                scope_parts.append(f"schema_names={cfg.schema_names}")
+            if cfg.table_names:
+                scope_parts.append(f"table_names={cfg.table_names}")
+            scope_msg = " with " + ", ".join(scope_parts) if scope_parts else ""
+            print(
+                f"\n\u2717 No tables found{scope_msg}.\n"
+                f"  Skipping Phases 2-7 — nothing to analyse.\n"
+                f"  Verify your filter values match actual schema/table names "
+                f"in the warehouse."
+            )
+            captured_at = datetime.now(timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S UTC"
+            )
+            return DataClusteringResult(
+                all_scores=[],
+                recommendations=[],
+                scores_df=scores_to_dataframe(spark, []),
+                text_report="No tables matched the configured scope filters.",
+                markdown_report="No tables matched the configured scope filters.",
+                html_report="<p>No tables matched the configured scope filters.</p>",
+                captured_at=captured_at,
+            )
+
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -335,7 +378,11 @@ class DataClusteringAdvisor:
         current_clustering = get_current_clustering_config(
             spark, cfg.warehouse_name, cfg.workspace_id, cfg.warehouse_id
         )
-        # Apply the same table filter so only selected tables are inspected
+        # Apply the same scope filters so only selected tables are inspected
+        if _schema_set:
+            current_clustering = current_clustering.filter(
+                F.lower(F.col("schema_name")).isin(_schema_set)
+            )
         if _table_filter is not None:
             current_clustering = current_clustering.filter(_table_filter)
         num_clustered = current_clustering.count()

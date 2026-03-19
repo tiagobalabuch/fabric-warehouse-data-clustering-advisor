@@ -48,6 +48,7 @@ from .report import (
     generate_html_report,
 )
 from ...core.report import save_report
+from ...core.warehouse_reader import read_warehouse_query
 from ...core.fabric_rest_client import FabricRestClient, FabricRestError
 
 
@@ -257,6 +258,7 @@ class SecurityCheckAdvisor:
 
         # Verbose: show active configuration
         self._log_header("Configuration")
+        self._log_kv("Schemas filter", cfg.schema_names or "(all)")
         self._log_kv("Tables filter", cfg.table_names or "(all)")
         self._log_kv("check_schema_permissions", cfg.check_schema_permissions)
         self._log_kv("check_custom_roles", cfg.check_custom_roles)
@@ -307,7 +309,8 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 1: Schema Permissions"] = elapsed
         else:
-            self._log("Phase 1: Schema permissions — SKIPPED (disabled in config)")
+            print("Phase 1: Schema permissions — SKIPPED (disabled in config)")
+            _phase_timings["Phase 1: Schema Permissions"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -322,52 +325,117 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 2: Custom Roles"] = elapsed
         else:
-            self._log("Phase 2: Custom roles — SKIPPED (disabled in config)")
+            print("Phase 2: Custom roles — SKIPPED (disabled in config)")
+            _phase_timings["Phase 2: Custom Roles"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
+        # Scope resolution: when schema_names or table_names are set,
+        # check whether any user tables actually match.  If none do,
+        # skip the table-scoped checks (RLS, CLS, DDM) to avoid
+        # unnecessary SQL round-trips.
+        # ================================================================
+        _any_table_checks = cfg.check_rls or cfg.check_cls or cfg.check_ddm
+        _has_scope_filter = bool(cfg.schema_names or cfg.table_names)
+        _skip_table_checks = False
+
+        if _any_table_checks and _has_scope_filter:
+            _t0 = time.perf_counter()
+            try:
+                _tbl_df = read_warehouse_query(
+                    spark, cfg.warehouse_name,
+                    "SELECT SCHEMA_NAME(schema_id) AS schema_name, "
+                    "name AS table_name FROM sys.tables",
+                    cfg.workspace_id, cfg.warehouse_id,
+                )
+                _tbl_rows = _tbl_df.collect()
+                _matched = set()
+                _schema_filter = {x.lower() for x in cfg.schema_names} if cfg.schema_names else None
+                for r in _tbl_rows:
+                    s, t = r["schema_name"], r["table_name"]
+                    if _schema_filter and s.lower() not in _schema_filter:
+                        continue
+                    if cfg.table_names:
+                        qualified = f"{s}.{t}"
+                        if not any(
+                            x == t or x == qualified
+                            for x in cfg.table_names
+                        ):
+                            continue
+                    _matched.add((s, t))
+                if not _matched:
+                    _skip_table_checks = True
+                    scope_parts = []
+                    if cfg.schema_names:
+                        scope_parts.append(f"schema_names={cfg.schema_names}")
+                    if cfg.table_names:
+                        scope_parts.append(f"table_names={cfg.table_names}")
+                    scope_msg = ", ".join(scope_parts)
+                    print(
+                        f"  ℹ No tables match the configured scope ({scope_msg}).\n"
+                        f"    Skipping table-scoped checks (RLS, CLS, DDM)."
+                    )
+                else:
+                    self._log(f"  Scope resolved: {len(_matched)} table(s) match filters.")
+            except Exception:
+                pass  # If scope query fails, run the checks normally
+            self._log(f"  ⏱ Scope resolution in {time.perf_counter() - _t0:.2f}s")
+
+        # ================================================================
         # Phase 3: Row-Level Security (SEC-003)
         # ================================================================
-        if cfg.check_rls:
+        if cfg.check_rls and not _skip_table_checks:
             findings, elapsed = self._run_phase(
                 "Phase 3: Analysing Row-Level Security",
                 check_row_level_security, spark, cfg.warehouse_name, cfg,
             )
             all_findings.extend(findings)
             _phase_timings["Phase 3: Row-Level Security"] = elapsed
+        elif not cfg.check_rls:
+            print("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
+            _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
         else:
-            self._log("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
+            print("Phase 3: Row-Level Security — SKIPPED (no tables in scope)")
+            _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
         # Phase 4: Column-Level Security (SEC-004)
         # ================================================================
-        if cfg.check_cls:
+        if cfg.check_cls and not _skip_table_checks:
             findings, elapsed = self._run_phase(
                 "Phase 4: Analysing Column-Level Security",
                 check_column_level_security, spark, cfg.warehouse_name, cfg,
             )
             all_findings.extend(findings)
             _phase_timings["Phase 4: Column-Level Security"] = elapsed
+        elif not cfg.check_cls:
+            print("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
+            _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
         else:
-            self._log("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
+            print("Phase 4: Column-Level Security — SKIPPED (no tables in scope)")
+            _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
         # Phase 5: Dynamic Data Masking (SEC-005)
         # ================================================================
-        if cfg.check_ddm:
+        if cfg.check_ddm and not _skip_table_checks:
             findings, elapsed = self._run_phase(
                 "Phase 5: Analysing Dynamic Data Masking",
                 check_dynamic_data_masking, spark, cfg.warehouse_name, cfg,
             )
             all_findings.extend(findings)
             _phase_timings["Phase 5: Dynamic Data Masking"] = elapsed
+        elif not cfg.check_ddm:
+            print("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
+            _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
         else:
-            self._log("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
+            print("Phase 5: Dynamic Data Masking — SKIPPED (no tables in scope)")
+            _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
 
         # ================================================================
         # REST API checks — resolve token once for all REST phases
@@ -496,6 +564,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 6: Workspace roles — SKIPPED ({reason})")
+            _phase_timings["Phase 6: Workspace Roles"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -516,6 +585,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 7: Network isolation — SKIPPED ({reason})")
+            _phase_timings["Phase 7: Network Isolation"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -538,6 +608,7 @@ class SecurityCheckAdvisor:
                 else "warehouse_id could not be resolved"
             )
             print(f"  ℹ Phase 8: SQL audit settings — SKIPPED ({reason})")
+            _phase_timings["Phase 8: SQL Audit Settings"] = "SKIPPED"
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -570,6 +641,7 @@ class SecurityCheckAdvisor:
                 else "warehouse_id could not be resolved"
             )
             print(f"  ℹ Phase 9: Item permissions — SKIPPED ({reason})")
+            _phase_timings["Phase 9: Item Permissions"] = "SKIPPED"
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -611,6 +683,7 @@ class SecurityCheckAdvisor:
                     "  ℹ Phase 10: Sensitivity labels — SKIPPED "
                     "(warehouse could not be resolved)"
                 )
+                _phase_timings["Phase 10: Sensitivity Labels"] = "SKIPPED"
         else:
             reason = (
                 "disabled in config" if not cfg.check_sensitivity_labels
@@ -618,6 +691,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 10: Sensitivity labels — SKIPPED ({reason})")
+            _phase_timings["Phase 10: Sensitivity Labels"] = "SKIPPED"
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -635,6 +709,7 @@ class SecurityCheckAdvisor:
             _phase_timings["Phase 11: Role Alignment"] = elapsed
         else:
             print("  ℹ Phase 11: Role alignment — SKIPPED (disabled in config)")
+            _phase_timings["Phase 11: Role Alignment"] = "SKIPPED"
 
         # ================================================================
         # Build summary and reports
@@ -660,7 +735,10 @@ class SecurityCheckAdvisor:
         if cfg.verbose:
             self._log("Phase Timings:")
             for phase, elapsed in _phase_timings.items():
-                self._log(f"  {phase:<40} {elapsed:.2f}s")
+                if isinstance(elapsed, str):
+                    self._log(f"  {phase:<40} {elapsed}")
+                else:
+                    self._log(f"  {phase:<40} {elapsed:.2f}s")
             self._log(f"  {'Total':<40} {_total_elapsed:.2f}s")
 
         print("\n\u2713 Security Check Advisor completed successfully.")

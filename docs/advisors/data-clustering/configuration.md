@@ -81,15 +81,22 @@ See [Scoring](scoring.md) for the detailed formulas.
 | `min_recommendation_score` | `int` | `40` | Minimum composite score to surface a recommendation. Columns below this are labelled "Not recommended". |
 | `generate_ctas` | `bool` | `False` | When `True`, generate one `CREATE TABLE ... AS SELECT` DDL statement per recommended column. Set this to include ready-to-run DDL in the report. |
 
-## Filtering
+## Scope Filtering
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `schema_names` | `list[str]` | `[]` | Restrict analysis to specific schemas. Empty = all user schemas. |
 | `table_names` | `list[str]` | `[]` | Restrict analysis to specific tables. Each entry can be `"table_name"` (matches any schema) or `"schema.table_name"` (exact match). Empty list = all tables. |
 
 Examples:
 
 ```python
+# Only analyse tables in the 'sales' schema
+config = DataClusteringConfig(
+    warehouse_name="MyWarehouse",
+    schema_names=["sales"],
+)
+
 # Analyse only these two tables
 config = DataClusteringConfig(
     warehouse_name="MyWarehouse",
