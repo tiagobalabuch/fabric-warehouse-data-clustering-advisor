@@ -309,7 +309,7 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 1: Schema Permissions"] = elapsed
         else:
-            self._log("Phase 1: Schema permissions — SKIPPED (disabled in config)")
+            print("Phase 1: Schema permissions — SKIPPED (disabled in config)")
             _phase_timings["Phase 1: Schema Permissions"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -325,7 +325,7 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 2: Custom Roles"] = elapsed
         else:
-            self._log("Phase 2: Custom roles — SKIPPED (disabled in config)")
+            print("Phase 2: Custom roles — SKIPPED (disabled in config)")
             _phase_timings["Phase 2: Custom Roles"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -393,10 +393,10 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 3: Row-Level Security"] = elapsed
         elif not cfg.check_rls:
-            self._log("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
+            print("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
             _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
         else:
-            self._log("Phase 3: Row-Level Security — SKIPPED (no tables in scope)")
+            print("Phase 3: Row-Level Security — SKIPPED (no tables in scope)")
             _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -412,10 +412,10 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 4: Column-Level Security"] = elapsed
         elif not cfg.check_cls:
-            self._log("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
+            print("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
             _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
         else:
-            self._log("Phase 4: Column-Level Security — SKIPPED (no tables in scope)")
+            print("Phase 4: Column-Level Security — SKIPPED (no tables in scope)")
             _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -431,10 +431,10 @@ class SecurityCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 5: Dynamic Data Masking"] = elapsed
         elif not cfg.check_ddm:
-            self._log("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
+            print("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
             _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
         else:
-            self._log("Phase 5: Dynamic Data Masking — SKIPPED (no tables in scope)")
+            print("Phase 5: Dynamic Data Masking — SKIPPED (no tables in scope)")
             _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
 
         # ================================================================

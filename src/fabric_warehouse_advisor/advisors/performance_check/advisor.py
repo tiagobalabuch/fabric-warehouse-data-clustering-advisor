@@ -313,7 +313,7 @@ class PerformanceCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 1: Caching"] = elapsed
         else:
-            self._log("Phase 1: Caching analysis — SKIPPED (disabled in config)")
+            print("Phase 1: Caching analysis — SKIPPED (disabled in config)")
             _phase_timings["Phase 1: Caching"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -330,7 +330,7 @@ class PerformanceCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 2: V-Order"] = elapsed
         else:
-            self._log("Phase 2: V-Order check — SKIPPED (disabled in config)")
+            print("Phase 2: V-Order check — SKIPPED (disabled in config)")
             _phase_timings["Phase 2: V-Order"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -346,7 +346,7 @@ class PerformanceCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 3: Query regression"] = elapsed
         else:
-            self._log("Phase 3: Query regression — SKIPPED (disabled in config)")
+            print("Phase 3: Query regression — SKIPPED (disabled in config)")
             _phase_timings["Phase 3: Query regression"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -430,10 +430,10 @@ class PerformanceCheckAdvisor:
             _phase_timings["Phase 4: Data types"] = time.perf_counter() - _t0
             self._log(f"  ⏱ Phase 4 completed in {_phase_timings['Phase 4: Data types']:.2f}s")
         elif not cfg.check_data_types:
-            self._log("Phase 4: Data type analysis — SKIPPED (disabled in config)")
+            print("Phase 4: Data type analysis — SKIPPED (disabled in config)")
             _phase_timings["Phase 4: Data types"] = "SKIPPED"
         else:
-            self._log("Phase 4: Data type analysis — SKIPPED (no tables in scope)")
+            print("Phase 4: Data type analysis — SKIPPED (no tables in scope)")
             _phase_timings["Phase 4: Data types"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -456,7 +456,7 @@ class PerformanceCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 5: Statistics"] = elapsed
         else:
-            self._log("Phase 5: Statistics health — SKIPPED (disabled in config)")
+            print("Phase 5: Statistics health — SKIPPED (disabled in config)")
             _phase_timings["Phase 5: Statistics"] = "SKIPPED"
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -472,10 +472,10 @@ class PerformanceCheckAdvisor:
             all_findings.extend(findings)
             _phase_timings["Phase 6: Collation"] = elapsed
         elif not cfg.check_collation:
-            self._log("Phase 6: Collation check — SKIPPED (disabled in config)")
+            print("Phase 6: Collation check — SKIPPED (disabled in config)")
             _phase_timings["Phase 6: Collation"] = "SKIPPED"
         else:
-            self._log("Phase 6: Collation check — SKIPPED (no tables in scope)")
+            print("Phase 6: Collation check — SKIPPED (no tables in scope)")
             _phase_timings["Phase 6: Collation"] = "SKIPPED"
 
         # ================================================================
