@@ -22,9 +22,10 @@ Usage
 from __future__ import annotations
 
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from pyspark.sql import SparkSession
 
@@ -44,6 +45,7 @@ from .report import (
 )
 from ...core.report import save_report
 from ...core.warehouse_reader import read_warehouse_query
+from ...core.phase_tracker import PhaseTracker, PhaseResult, PHASE_COMPLETED, PHASE_SKIPPED, PHASE_FAILED
 
 
 # ------------------------------------------------------------------
@@ -202,43 +204,6 @@ class PerformanceCheckAdvisor:
                 self._log(f"       SQL   : {f.sql_fix}")
         self._log_footer()
 
-    def _run_phase(
-        self,
-        phase_label: str,
-        check_fn,
-        *args: object,
-        **kwargs: object,
-    ) -> Tuple[List[Finding], float]:
-        """Run a check phase with timing and verbose severity logging.
-
-        Parameters
-        ----------
-        phase_label : str
-            Printed to stdout, e.g. ``"Phase 2: Analysing caching …"``.
-        check_fn : callable
-            The check function.  Must return ``List[Finding]``.
-        *args, **kwargs
-            Forwarded to *check_fn*.
-
-        Returns
-        -------
-        tuple[list[Finding], float]
-            The findings produced and elapsed wall-clock seconds.
-        """
-        _t0 = time.perf_counter()
-        print(f"{phase_label} ...")
-        findings = check_fn(*args, **kwargs)
-        _ct = sum(1 for f in findings if f.is_critical)
-        _ht = sum(1 for f in findings if f.is_high)
-        _mt = sum(1 for f in findings if f.is_medium)
-        _lt = sum(1 for f in findings if f.is_low)
-        _it = sum(1 for f in findings if f.is_info)
-        self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-        self._log_findings_detail(findings)
-        elapsed = time.perf_counter() - _t0
-        self._log(f"  ⏱ {phase_label.split(':')[0]} completed in {elapsed:.2f}s")
-        return findings, elapsed
-
     # ---- public API ----
 
     def run(self) -> PerformanceCheckResult:
@@ -280,7 +245,10 @@ class PerformanceCheckAdvisor:
         self._log_footer()
 
         _run_start = time.perf_counter()
-        _phase_timings: Dict[str, float] = {}
+        tracker = PhaseTracker(
+            log_fn=self._log,
+            log_findings_fn=self._log_findings_detail,
+        )
         all_findings: List[Finding] = []
         total_tables = 0
         total_columns = 0
@@ -296,8 +264,9 @@ class PerformanceCheckAdvisor:
         )
         all_findings.extend(edition_findings)
         self._log(f"  Edition: {edition}")
-        _phase_timings["Phase 0: Edition detection"] = time.perf_counter() - _t0
-        self._log(f"  ⏱ Phase 0 completed in {_phase_timings['Phase 0: Edition detection']:.2f}s")
+        _p0_elapsed = time.perf_counter() - _t0
+        tracker.record(PhaseResult(name="Phase 0: Edition detection", elapsed=_p0_elapsed, findings=edition_findings))
+        self._log(f"  ⏱ Phase 0 completed in {_p0_elapsed:.2f}s")
         self._log_findings_detail(edition_findings)
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -306,15 +275,14 @@ class PerformanceCheckAdvisor:
         # Phase 1: Caching Analysis  (warehouse-level)
         # ================================================================
         if cfg.check_caching:
-            findings, elapsed = self._run_phase(
-                "Phase 1: Analysing caching configuration",
+            pr = tracker.run_phase(
+                "Phase 1: Caching",
                 check_caching, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 1: Caching"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("Phase 1: Caching analysis — SKIPPED (disabled in config)")
-            _phase_timings["Phase 1: Caching"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 1: Caching", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -322,16 +290,15 @@ class PerformanceCheckAdvisor:
         # Phase 2: V-Order Check  (warehouse-level)
         # ================================================================
         if cfg.check_vorder:
-            findings, elapsed = self._run_phase(
-                "Phase 2: Checking V-Order optimization",
+            pr = tracker.run_phase(
+                "Phase 2: V-Order",
                 check_vorder, spark, cfg.warehouse_name, cfg,
                 edition=edition,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 2: V-Order"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("Phase 2: V-Order check — SKIPPED (disabled in config)")
-            _phase_timings["Phase 2: V-Order"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 2: V-Order", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -339,15 +306,14 @@ class PerformanceCheckAdvisor:
         # Phase 3: Query Regression Detection  (warehouse-level)
         # ================================================================
         if cfg.check_query_regression:
-            findings, elapsed = self._run_phase(
-                "Phase 3: Detecting query regressions",
+            pr = tracker.run_phase(
+                "Phase 3: Query regression",
                 check_query_regression, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 3: Query regression"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("Phase 3: Query regression — SKIPPED (disabled in config)")
-            _phase_timings["Phase 3: Query regression"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 3: Query regression", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -409,32 +375,43 @@ class PerformanceCheckAdvisor:
 
         # ================================================================
         # Phase 4: Data Type Analysis  (table-scoped)
+        #
+        # check_data_types returns (findings, tables, columns) so it
+        # cannot use the standard run_phase() that expects List[Finding].
         # ================================================================
         if cfg.check_data_types and not _skip_table_checks:
             _t0 = time.perf_counter()
-            print("Phase 4: Analysing data types ...")
-            dt_findings, dt_tables, dt_columns = check_data_types(
-                spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(dt_findings)
-            total_tables = max(total_tables, dt_tables)
-            total_columns = max(total_columns, dt_columns)
-            _ct = sum(1 for f in dt_findings if f.is_critical)
-            _ht = sum(1 for f in dt_findings if f.is_high)
-            _mt = sum(1 for f in dt_findings if f.is_medium)
-            _lt = sum(1 for f in dt_findings if f.is_low)
-            _it = sum(1 for f in dt_findings if f.is_info)
-            self._log(f"  Tables: {dt_tables} | Columns: {dt_columns}")
-            self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-            self._log_findings_detail(dt_findings)
-            _phase_timings["Phase 4: Data types"] = time.perf_counter() - _t0
-            self._log(f"  ⏱ Phase 4 completed in {_phase_timings['Phase 4: Data types']:.2f}s")
+            print("Phase 4: Data types ...")
+            try:
+                dt_findings, dt_tables, dt_columns = check_data_types(
+                    spark, cfg.warehouse_name, cfg,
+                )
+                all_findings.extend(dt_findings)
+                total_tables = max(total_tables, dt_tables)
+                total_columns = max(total_columns, dt_columns)
+                self._log(f"  Tables: {dt_tables} | Columns: {dt_columns}")
+                _ct = sum(1 for f in dt_findings if f.is_critical)
+                _ht = sum(1 for f in dt_findings if f.is_high)
+                _mt = sum(1 for f in dt_findings if f.is_medium)
+                _lt = sum(1 for f in dt_findings if f.is_low)
+                _it = sum(1 for f in dt_findings if f.is_info)
+                self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
+                self._log_findings_detail(dt_findings)
+                _p4_elapsed = time.perf_counter() - _t0
+                tracker.record(PhaseResult(name="Phase 4: Data types", elapsed=_p4_elapsed, findings=dt_findings))
+                self._log(f"  ⏱ Phase 4 completed in {_p4_elapsed:.2f}s")
+            except Exception as exc:
+                _p4_elapsed = time.perf_counter() - _t0
+                _short = f"{type(exc).__name__}: {exc}"
+                print(f"  ⚠ Phase 4: Data types FAILED — {_short}")
+                self._log(f"  {traceback.format_exc()}")
+                tracker.record(PhaseResult(name="Phase 4: Data types", status=PHASE_FAILED, elapsed=_p4_elapsed, skip_reason=_short))
         elif not cfg.check_data_types:
             print("Phase 4: Data type analysis — SKIPPED (disabled in config)")
-            _phase_timings["Phase 4: Data types"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 4: Data types", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         else:
             print("Phase 4: Data type analysis — SKIPPED (no tables in scope)")
-            _phase_timings["Phase 4: Data types"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 4: Data types", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -443,21 +420,17 @@ class PerformanceCheckAdvisor:
         #           warehouse-level config checks always run)
         # ================================================================
         if cfg.check_statistics:
-            _stats_label = (
-                "Phase 5: Analysing statistics health (config only — no tables in scope)"
-                if _skip_table_checks
-                else "Phase 5: Analysing statistics health"
-            )
-            findings, elapsed = self._run_phase(
-                _stats_label,
+            pr = tracker.run_phase(
+                "Phase 5: Statistics",
                 check_statistics, spark, cfg.warehouse_name, cfg,
                 skip_table_checks=_skip_table_checks,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 5: Statistics"] = elapsed
+            all_findings.extend(pr.findings)
+            if _skip_table_checks and pr.is_completed:
+                pr.note = "config only — no tables in scope"
         else:
             print("Phase 5: Statistics health — SKIPPED (disabled in config)")
-            _phase_timings["Phase 5: Statistics"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 5: Statistics", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -465,18 +438,17 @@ class PerformanceCheckAdvisor:
         # Phase 6: Collation Mismatch  (table-scoped)
         # ================================================================
         if cfg.check_collation and not _skip_table_checks:
-            findings, elapsed = self._run_phase(
-                "Phase 6: Checking collation consistency",
+            pr = tracker.run_phase(
+                "Phase 6: Collation",
                 check_collation, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 6: Collation"] = elapsed
+            all_findings.extend(pr.findings)
         elif not cfg.check_collation:
             print("Phase 6: Collation check — SKIPPED (disabled in config)")
-            _phase_timings["Phase 6: Collation"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 6: Collation", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         else:
             print("Phase 6: Collation check — SKIPPED (no tables in scope)")
-            _phase_timings["Phase 6: Collation"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 6: Collation", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
 
         # ================================================================
         # Build summary and reports
@@ -501,14 +473,7 @@ class PerformanceCheckAdvisor:
         _total_elapsed = time.perf_counter() - _run_start
 
         # Phase timings (verbose only)
-        if cfg.verbose:
-            self._log("Phase Timings:")
-            for phase, elapsed in _phase_timings.items():
-                if isinstance(elapsed, str):
-                    self._log(f"  {phase:<40} {elapsed}")
-                else:
-                    self._log(f"  {phase:<40} {elapsed:.2f}s")
-            self._log(f"  {'Total':<40} {_total_elapsed:.2f}s")
+        tracker.print_summary(verbose=cfg.verbose, total_elapsed=_total_elapsed)
 
         print("\n\u2713 Performance Check Advisor completed successfully.")
         print("  Use  displayHTML(result.html_report)  for a rich HTML view.")

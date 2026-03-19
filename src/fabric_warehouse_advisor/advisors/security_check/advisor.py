@@ -22,9 +22,10 @@ Usage
 from __future__ import annotations
 
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
 from pyspark.sql import SparkSession
 
@@ -50,6 +51,7 @@ from .report import (
 from ...core.report import save_report
 from ...core.warehouse_reader import read_warehouse_query
 from ...core.fabric_rest_client import FabricRestClient, FabricRestError
+from ...core.phase_tracker import PhaseTracker, PhaseResult, PHASE_COMPLETED, PHASE_SKIPPED, PHASE_FAILED
 
 
 # ------------------------------------------------------------------
@@ -191,43 +193,6 @@ class SecurityCheckAdvisor:
                 self._log(f"       SQL   : {f.sql_fix}")
         self._log_footer()
 
-    def _run_phase(
-        self,
-        phase_label: str,
-        check_fn,
-        *args: object,
-        **kwargs: object,
-    ) -> Tuple[List[Finding], float]:
-        """Run a check phase with timing and verbose severity logging.
-
-        Parameters
-        ----------
-        phase_label : str
-            Printed to stdout, e.g. ``"Phase 1: Checking permissions …"``.
-        check_fn : callable
-            The check function.  Must return ``List[Finding]``.
-        *args, **kwargs
-            Forwarded to *check_fn*.
-
-        Returns
-        -------
-        tuple[list[Finding], float]
-            The findings produced and elapsed wall-clock seconds.
-        """
-        _t0 = time.perf_counter()
-        print(f"{phase_label} ...")
-        findings = check_fn(*args, **kwargs)
-        _ct = sum(1 for f in findings if f.is_critical)
-        _ht = sum(1 for f in findings if f.is_high)
-        _mt = sum(1 for f in findings if f.is_medium)
-        _lt = sum(1 for f in findings if f.is_low)
-        _it = sum(1 for f in findings if f.is_info)
-        self._log(f"  Findings: {_ct} critical, {_ht} high, {_mt} medium, {_lt} low, {_it} info")
-        self._log_findings_detail(findings)
-        elapsed = time.perf_counter() - _t0
-        self._log(f"  ⏱ {phase_label.split(':')[0]} completed in {elapsed:.2f}s")
-        return findings, elapsed
-
     # ---- public API ----
 
     def run(self) -> SecurityCheckResult:
@@ -274,7 +239,10 @@ class SecurityCheckAdvisor:
         self._log_footer()
 
         _run_start = time.perf_counter()
-        _phase_timings: Dict[str, float] = {}
+        tracker = PhaseTracker(
+            log_fn=self._log,
+            log_findings_fn=self._log_findings_detail,
+        )
         all_findings: List[Finding] = []
 
         # ================================================================
@@ -288,8 +256,9 @@ class SecurityCheckAdvisor:
         )
         all_findings.extend(edition_findings)
         self._log(f"  Edition: {edition}")
-        _phase_timings["Phase 0: Edition detection"] = time.perf_counter() - _phase_start
-        self._log(f"  \u23f1 Phase 0 completed in {_phase_timings['Phase 0: Edition detection']:.2f}s")
+        _p0_elapsed = time.perf_counter() - _phase_start
+        tracker.record(PhaseResult(name="Phase 0: Edition detection", elapsed=_p0_elapsed, findings=edition_findings))
+        self._log(f"  \u23f1 Phase 0 completed in {_p0_elapsed:.2f}s")
         self._log_findings_detail(edition_findings)
 
         # Set user-facing item label based on detected edition
@@ -302,15 +271,14 @@ class SecurityCheckAdvisor:
         # Phase 1: Schema Permissions (SEC-001)
         # ================================================================
         if cfg.check_schema_permissions:
-            findings, elapsed = self._run_phase(
-                "Phase 1: Analysing schema permissions",
+            pr = tracker.run_phase(
+                "Phase 1: Schema Permissions",
                 check_schema_permissions, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 1: Schema Permissions"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("Phase 1: Schema permissions — SKIPPED (disabled in config)")
-            _phase_timings["Phase 1: Schema Permissions"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 1: Schema Permissions", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -318,15 +286,14 @@ class SecurityCheckAdvisor:
         # Phase 2: Custom Roles (SEC-002)
         # ================================================================
         if cfg.check_custom_roles:
-            findings, elapsed = self._run_phase(
-                "Phase 2: Analysing custom roles",
+            pr = tracker.run_phase(
+                "Phase 2: Custom Roles",
                 check_custom_roles, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 2: Custom Roles"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("Phase 2: Custom roles — SKIPPED (disabled in config)")
-            _phase_timings["Phase 2: Custom Roles"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 2: Custom Roles", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -386,18 +353,17 @@ class SecurityCheckAdvisor:
         # Phase 3: Row-Level Security (SEC-003)
         # ================================================================
         if cfg.check_rls and not _skip_table_checks:
-            findings, elapsed = self._run_phase(
-                "Phase 3: Analysing Row-Level Security",
+            pr = tracker.run_phase(
+                "Phase 3: Row-Level Security",
                 check_row_level_security, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 3: Row-Level Security"] = elapsed
+            all_findings.extend(pr.findings)
         elif not cfg.check_rls:
             print("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
-            _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 3: Row-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         else:
             print("Phase 3: Row-Level Security — SKIPPED (no tables in scope)")
-            _phase_timings["Phase 3: Row-Level Security"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 3: Row-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -405,18 +371,17 @@ class SecurityCheckAdvisor:
         # Phase 4: Column-Level Security (SEC-004)
         # ================================================================
         if cfg.check_cls and not _skip_table_checks:
-            findings, elapsed = self._run_phase(
-                "Phase 4: Analysing Column-Level Security",
+            pr = tracker.run_phase(
+                "Phase 4: Column-Level Security",
                 check_column_level_security, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 4: Column-Level Security"] = elapsed
+            all_findings.extend(pr.findings)
         elif not cfg.check_cls:
             print("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
-            _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 4: Column-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         else:
             print("Phase 4: Column-Level Security — SKIPPED (no tables in scope)")
-            _phase_timings["Phase 4: Column-Level Security"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 4: Column-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -424,18 +389,17 @@ class SecurityCheckAdvisor:
         # Phase 5: Dynamic Data Masking (SEC-005)
         # ================================================================
         if cfg.check_ddm and not _skip_table_checks:
-            findings, elapsed = self._run_phase(
-                "Phase 5: Analysing Dynamic Data Masking",
+            pr = tracker.run_phase(
+                "Phase 5: Dynamic Data Masking",
                 check_dynamic_data_masking, spark, cfg.warehouse_name, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 5: Dynamic Data Masking"] = elapsed
+            all_findings.extend(pr.findings)
         elif not cfg.check_ddm:
             print("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
-            _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 5: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="disabled in config"))
         else:
             print("Phase 5: Dynamic Data Masking — SKIPPED (no tables in scope)")
-            _phase_timings["Phase 5: Dynamic Data Masking"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 5: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
 
         # ================================================================
         # REST API checks — resolve token once for all REST phases
@@ -551,12 +515,11 @@ class SecurityCheckAdvisor:
                 workspace_role_assignments = None
 
         if cfg.check_workspace_roles and rest_client and cfg.workspace_id:
-            findings, elapsed = self._run_phase(
-                "Phase 6: Analysing workspace role assignments",
+            pr = tracker.run_phase(
+                "Phase 6: Workspace Roles",
                 check_workspace_roles, rest_client, cfg.workspace_id, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 6: Workspace Roles"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             reason = (
                 "disabled in config" if not cfg.check_workspace_roles
@@ -564,7 +527,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 6: Workspace roles — SKIPPED ({reason})")
-            _phase_timings["Phase 6: Workspace Roles"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 6: Workspace Roles", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -572,12 +535,11 @@ class SecurityCheckAdvisor:
         # Phase 7: Network Isolation (SEC-007) — REST API
         # ================================================================
         if cfg.check_network_isolation and rest_client and cfg.workspace_id:
-            findings, elapsed = self._run_phase(
-                "Phase 7: Analysing network isolation",
+            pr = tracker.run_phase(
+                "Phase 7: Network Isolation",
                 check_network_isolation, rest_client, cfg.workspace_id, cfg,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 7: Network Isolation"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             reason = (
                 "disabled in config" if not cfg.check_network_isolation
@@ -585,7 +547,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 7: Network isolation — SKIPPED ({reason})")
-            _phase_timings["Phase 7: Network Isolation"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 7: Network Isolation", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
@@ -593,13 +555,12 @@ class SecurityCheckAdvisor:
         # Phase 8: SQL Audit Settings (SEC-008) — REST API
         # ================================================================
         if cfg.check_sql_audit and rest_client and cfg.workspace_id and resolved_warehouse_id:
-            findings, elapsed = self._run_phase(
-                "Phase 8: Analysing SQL audit settings",
+            pr = tracker.run_phase(
+                "Phase 8: SQL Audit Settings",
                 check_sql_audit, rest_client, cfg.workspace_id,
                 resolved_warehouse_id, cfg, is_sql_endpoint,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 8: SQL Audit Settings"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             reason = (
                 "disabled in config" if not cfg.check_sql_audit
@@ -608,7 +569,7 @@ class SecurityCheckAdvisor:
                 else "warehouse_id could not be resolved"
             )
             print(f"  ℹ Phase 8: SQL audit settings — SKIPPED ({reason})")
-            _phase_timings["Phase 8: SQL Audit Settings"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 8: SQL Audit Settings", status=PHASE_SKIPPED, skip_reason=reason))
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -625,14 +586,13 @@ class SecurityCheckAdvisor:
                     if pid:
                         ws_principal_roles[pid] = a.get("role", "")
 
-            findings, elapsed = self._run_phase(
-                "Phase 9: Analysing item permissions (Admin API)",
+            pr = tracker.run_phase(
+                "Phase 9: Item Permissions",
                 check_item_permissions, rest_client, cfg.workspace_id,
                 resolved_warehouse_id, cfg, ws_principal_roles,
                 is_sql_endpoint,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 9: Item Permissions"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             reason = (
                 "disabled in config" if not cfg.check_item_permissions
@@ -641,7 +601,7 @@ class SecurityCheckAdvisor:
                 else "warehouse_id could not be resolved"
             )
             print(f"  ℹ Phase 9: Item permissions — SKIPPED ({reason})")
-            _phase_timings["Phase 9: Item Permissions"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 9: Item Permissions", status=PHASE_SKIPPED, skip_reason=reason))
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -672,18 +632,17 @@ class SecurityCheckAdvisor:
             if not wh_info and resolved_warehouse_id:
                 wh_info = {"id": resolved_warehouse_id, "displayName": cfg.warehouse_name}
             if wh_info:
-                findings, elapsed = self._run_phase(
-                    "Phase 10: Checking sensitivity labels",
+                pr = tracker.run_phase(
+                    "Phase 10: Sensitivity Labels",
                     check_sensitivity_labels, wh_info, cfg,
                 )
-                all_findings.extend(findings)
-                _phase_timings["Phase 10: Sensitivity Labels"] = elapsed
+                all_findings.extend(pr.findings)
             else:
                 print(
                     "  ℹ Phase 10: Sensitivity labels — SKIPPED "
                     "(warehouse could not be resolved)"
                 )
-                _phase_timings["Phase 10: Sensitivity Labels"] = "SKIPPED"
+                tracker.record(PhaseResult(name="Phase 10: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason="warehouse could not be resolved"))
         else:
             reason = (
                 "disabled in config" if not cfg.check_sensitivity_labels
@@ -691,7 +650,7 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set"
             )
             print(f"  ℹ Phase 10: Sensitivity labels — SKIPPED ({reason})")
-            _phase_timings["Phase 10: Sensitivity Labels"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 10: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason=reason))
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -700,16 +659,15 @@ class SecurityCheckAdvisor:
         # Phase 11: Role Alignment (SEC-011) — T-SQL + REST cross-ref
         # ================================================================
         if cfg.check_role_alignment:
-            findings, elapsed = self._run_phase(
-                "Phase 11: Analysing role alignment",
+            pr = tracker.run_phase(
+                "Phase 11: Role Alignment",
                 check_role_alignment, spark, cfg.warehouse_name, cfg,
                 workspace_role_assignments,
             )
-            all_findings.extend(findings)
-            _phase_timings["Phase 11: Role Alignment"] = elapsed
+            all_findings.extend(pr.findings)
         else:
             print("  ℹ Phase 11: Role alignment — SKIPPED (disabled in config)")
-            _phase_timings["Phase 11: Role Alignment"] = "SKIPPED"
+            tracker.record(PhaseResult(name="Phase 11: Role Alignment", status=PHASE_SKIPPED, skip_reason="disabled in config"))
 
         # ================================================================
         # Build summary and reports
@@ -732,14 +690,7 @@ class SecurityCheckAdvisor:
         _total_elapsed = time.perf_counter() - _run_start
 
         # Phase timings (verbose only)
-        if cfg.verbose:
-            self._log("Phase Timings:")
-            for phase, elapsed in _phase_timings.items():
-                if isinstance(elapsed, str):
-                    self._log(f"  {phase:<40} {elapsed}")
-                else:
-                    self._log(f"  {phase:<40} {elapsed:.2f}s")
-            self._log(f"  {'Total':<40} {_total_elapsed:.2f}s")
+        tracker.print_summary(verbose=cfg.verbose, total_elapsed=_total_elapsed)
 
         print("\n\u2713 Security Check Advisor completed successfully.")
         print("  Use  displayHTML(result.html_report)  for a rich HTML view.")
