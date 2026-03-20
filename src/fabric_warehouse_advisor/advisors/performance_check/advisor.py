@@ -24,8 +24,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
-
 from pyspark.sql import SparkSession
 
 from .config import PerformanceCheckConfig
@@ -71,10 +69,10 @@ class PerformanceCheckResult:
     """Container for all outputs produced by a performance check run."""
 
     #: All findings from every check.
-    findings: List[Finding] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
 
     #: Aggregated summary.
-    summary: Optional[CheckSummary] = None
+    summary: CheckSummary | None = None
 
     #: Detected warehouse edition.
     warehouse_edition: str = ""
@@ -186,7 +184,7 @@ class PerformanceCheckAdvisor:
             pad = ' ' * indent
             print(f"{pad}{key:<30}: {value}")
 
-    def _log_findings_detail(self, findings: List[Finding]) -> None:
+    def _log_findings_detail(self, findings: list[Finding]) -> None:
         """Print per-finding detail when verbose is enabled."""
         if not self.config.verbose or not findings:
             return
@@ -249,7 +247,7 @@ class PerformanceCheckAdvisor:
             log_fn=self._log,
             log_findings_fn=self._log_findings_detail,
         )
-        all_findings: List[Finding] = []
+        all_findings: list[Finding] = []
         total_tables = 0
         total_columns = 0
 
@@ -258,7 +256,7 @@ class PerformanceCheckAdvisor:
         # ================================================================
         edition = ""
 
-        def _detect_edition_wrapper() -> List[Finding]:
+        def _detect_edition_wrapper() -> list[Finding]:
             nonlocal edition
             edition, findings = detect_warehouse_edition(
                 spark, cfg.warehouse_name,
@@ -345,12 +343,10 @@ class PerformanceCheckAdvisor:
         # Phase 4: Data Type Analysis  (table-scoped)
         # ================================================================
         if cfg.check_data_types and not _skip_table_checks:
-            def _check_data_types_wrapper(
-                _spark, _warehouse, _cfg,
-            ) -> List[Finding]:
+            def _check_data_types_wrapper() -> list[Finding]:
                 nonlocal total_tables, total_columns
                 findings, tables, columns = check_data_types(
-                    _spark, _warehouse, _cfg,
+                    spark, cfg.warehouse_name, cfg,
                 )
                 total_tables = max(total_tables, tables)
                 total_columns = max(total_columns, columns)
@@ -358,8 +354,7 @@ class PerformanceCheckAdvisor:
                 return findings
 
             pr = tracker.run_phase(
-                "Phase 4: Data Types",
-                _check_data_types_wrapper, spark, cfg.warehouse_name, cfg,
+                "Phase 4: Data Types", _check_data_types_wrapper,
             )
             all_findings.extend(pr.findings)
         elif not cfg.check_data_types:

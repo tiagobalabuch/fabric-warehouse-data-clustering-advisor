@@ -24,8 +24,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Optional
-
 from pyspark.sql import SparkSession
 
 from .config import SecurityCheckConfig
@@ -63,10 +61,10 @@ class SecurityCheckResult:
     """Container for all outputs produced by a security check run."""
 
     #: All findings from every check.
-    findings: List[Finding] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
 
     #: Aggregated summary.
-    summary: Optional[CheckSummary] = None
+    summary: CheckSummary | None = None
 
     #: Pre-formatted text report.
     text_report: str = ""
@@ -175,7 +173,7 @@ class SecurityCheckAdvisor:
             pad = ' ' * indent
             print(f"{pad}{key:<30}: {value}")
 
-    def _log_findings_detail(self, findings: List[Finding]) -> None:
+    def _log_findings_detail(self, findings: list[Finding]) -> None:
         """Print per-finding detail when verbose is enabled."""
         if not self.config.verbose or not findings:
             return
@@ -243,14 +241,14 @@ class SecurityCheckAdvisor:
             log_fn=self._log,
             log_findings_fn=self._log_findings_detail,
         )
-        all_findings: List[Finding] = []
+        all_findings: list[Finding] = []
 
         # ================================================================
         # Phase 0: Detect warehouse edition
         # ================================================================
         edition = ""
 
-        def _detect_edition_wrapper() -> List[Finding]:
+        def _detect_edition_wrapper() -> list[Finding]:
             nonlocal edition
             edition, findings = detect_warehouse_edition(
                 spark, cfg.warehouse_name, cfg.workspace_id, cfg.warehouse_id,

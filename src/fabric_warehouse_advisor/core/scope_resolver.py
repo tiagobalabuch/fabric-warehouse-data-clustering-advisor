@@ -89,15 +89,14 @@ def resolve_table_scope(
         schema_filter = (
             {x.lower() for x in schema_names} if schema_names else None
         )
+        table_filter = set(table_names) if table_names else None
 
         for r in rows:
             s, t = r["schema_name"], r["table_name"]
             if schema_filter and s.lower() not in schema_filter:
                 continue
-            if table_names:
-                qualified = f"{s}.{t}"
-                if not any(x == t or x == qualified for x in table_names):
-                    continue
+            if table_filter and t not in table_filter and f"{s}.{t}" not in table_filter:
+                continue
             matched.add((s, t))
 
         elapsed = time.perf_counter() - t0
