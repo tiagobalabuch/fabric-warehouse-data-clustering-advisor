@@ -19,7 +19,7 @@ from __future__ import annotations
 import time
 import traceback
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .findings import Finding
 
@@ -84,7 +84,7 @@ class PhaseResult:
         return self.status == PHASE_FAILED
 
     @property
-    def finding_counts(self) -> dict[str, int]:
+    def finding_counts(self) -> Dict[str, int]:
         """Return ``{critical, high, medium, low, info}`` counts."""
         return {
             "critical": sum(1 for f in self.findings if f.is_critical),
@@ -258,7 +258,7 @@ class PhaseTracker:
     def print_summary(
         self,
         verbose: bool = False,
-        total_elapsed: float | None = None,
+        total_elapsed: Optional[float] = None,
         show_pct: bool = False,
     ) -> None:
         """Print the phase summary.
@@ -338,7 +338,7 @@ class PhaseTracker:
             status_parts.append(f"{self.skipped_count} skipped")
 
         # Aggregate finding counts across all phases
-        all_counts: dict[str, int] = {
+        all_counts: Dict[str, int] = {
             "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0,
         }
         for p in self._phases:
