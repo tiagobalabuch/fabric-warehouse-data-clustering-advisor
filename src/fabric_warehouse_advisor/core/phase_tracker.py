@@ -19,7 +19,7 @@ from __future__ import annotations
 import time
 import traceback
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable
 
 from .findings import Finding
 
@@ -65,7 +65,7 @@ class PhaseResult:
     name: str
     status: str = PHASE_COMPLETED
     elapsed: float = 0.0
-    findings: List[Finding] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
     skip_reason: str = ""
     note: str = ""
 
@@ -84,7 +84,7 @@ class PhaseResult:
         return self.status == PHASE_FAILED
 
     @property
-    def finding_counts(self) -> Dict[str, int]:
+    def finding_counts(self) -> dict[str, int]:
         """Return ``{critical, high, medium, low, info}`` counts."""
         return {
             "critical": sum(1 for f in self.findings if f.is_critical),
@@ -126,10 +126,10 @@ class PhaseTracker:
 
     def __init__(
         self,
-        log_fn: Optional[Callable[[str], None]] = None,
-        log_findings_fn: Optional[Callable[[list], None]] = None,
+        log_fn: Callable[[str], None] | None = None,
+        log_findings_fn: Callable[[list], None] | None = None,
     ) -> None:
-        self._phases: List[PhaseResult] = []
+        self._phases: list[PhaseResult] = []
         self._log_fn = log_fn
         self._log_findings_fn = log_findings_fn
 
@@ -152,7 +152,7 @@ class PhaseTracker:
     def run_phase(
         self,
         name: str,
-        check_fn: Callable[..., List[Finding]],
+        check_fn: Callable[..., list[Finding]],
         *args: object,
         note: str = "",
         **kwargs: object,
@@ -226,7 +226,7 @@ class PhaseTracker:
         return result
 
     @property
-    def phases(self) -> List[PhaseResult]:
+    def phases(self) -> list[PhaseResult]:
         """All recorded phases in order."""
         return list(self._phases)
 
@@ -238,9 +238,9 @@ class PhaseTracker:
         return sum(p.elapsed for p in self._phases)
 
     @property
-    def all_findings(self) -> List[Finding]:
+    def all_findings(self) -> list[Finding]:
         """Flattened list of findings from every phase."""
-        result: List[Finding] = []
+        result: list[Finding] = []
         for p in self._phases:
             result.extend(p.findings)
         return result
@@ -262,7 +262,7 @@ class PhaseTracker:
     def print_summary(
         self,
         verbose: bool = False,
-        total_elapsed: Optional[float] = None,
+        total_elapsed: float | None = None,
         show_pct: bool = False,
     ) -> None:
         """Print the phase summary.
@@ -342,7 +342,7 @@ class PhaseTracker:
             status_parts.append(f"{self.skipped_count} skipped")
 
         # Aggregate finding counts across all phases
-        all_counts: Dict[str, int] = {
+        all_counts: dict[str, int] = {
             "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0,
         }
         for p in self._phases:

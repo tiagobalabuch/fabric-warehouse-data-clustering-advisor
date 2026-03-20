@@ -256,18 +256,21 @@ class PerformanceCheckAdvisor:
         # ================================================================
         # Phase 0: Warehouse Type Detection
         # ================================================================
-        _t0 = time.perf_counter()
-        print("Phase 0: Detecting warehouse edition ...")
-        edition, edition_findings = detect_warehouse_edition(
-            spark, cfg.warehouse_name,
-            cfg.workspace_id, cfg.warehouse_id, cfg.sql_endpoint_id,
+        edition = ""
+
+        def _detect_edition_wrapper() -> List[Finding]:
+            nonlocal edition
+            edition, findings = detect_warehouse_edition(
+                spark, cfg.warehouse_name,
+                cfg.workspace_id, cfg.warehouse_id, cfg.sql_endpoint_id,
+            )
+            self._log(f"  Edition: {edition}")
+            return findings
+
+        pr = tracker.run_phase(
+            "Phase 0: Edition detection", _detect_edition_wrapper,
         )
-        all_findings.extend(edition_findings)
-        self._log(f"  Edition: {edition}")
-        _p0_elapsed = time.perf_counter() - _t0
-        tracker.record(PhaseResult(name="Phase 0: Edition detection", elapsed=_p0_elapsed, findings=edition_findings))
-        self._log(f"  ⏱ Phase 0 completed in {_p0_elapsed:.2f}s")
-        self._log_findings_detail(edition_findings)
+        all_findings.extend(pr.findings)
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 

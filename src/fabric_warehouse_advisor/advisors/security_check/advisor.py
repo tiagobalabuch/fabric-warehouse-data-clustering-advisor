@@ -248,18 +248,21 @@ class SecurityCheckAdvisor:
         # ================================================================
         # Phase 0: Detect warehouse edition
         # ================================================================
-        _phase_start = time.perf_counter()
-        print("Phase 0: Detecting warehouse edition ...")
-        edition, edition_findings = detect_warehouse_edition(
-            spark, cfg.warehouse_name, cfg.workspace_id, cfg.warehouse_id,
-            cfg.sql_endpoint_id,
+        edition = ""
+
+        def _detect_edition_wrapper() -> List[Finding]:
+            nonlocal edition
+            edition, findings = detect_warehouse_edition(
+                spark, cfg.warehouse_name, cfg.workspace_id, cfg.warehouse_id,
+                cfg.sql_endpoint_id,
+            )
+            self._log(f"  Edition: {edition}")
+            return findings
+
+        pr = tracker.run_phase(
+            "Phase 0: Edition detection", _detect_edition_wrapper,
         )
-        all_findings.extend(edition_findings)
-        self._log(f"  Edition: {edition}")
-        _p0_elapsed = time.perf_counter() - _phase_start
-        tracker.record(PhaseResult(name="Phase 0: Edition detection", elapsed=_p0_elapsed, findings=edition_findings))
-        self._log(f"  \u23f1 Phase 0 completed in {_p0_elapsed:.2f}s")
-        self._log_findings_detail(edition_findings)
+        all_findings.extend(pr.findings)
 
         # Set user-facing item label based on detected edition
         if edition == "LakeWarehouse" or cfg.sql_endpoint_id:

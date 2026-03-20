@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Set, Tuple
+from typing import Callable
 
 from .warehouse_reader import read_warehouse_query
 
@@ -24,7 +24,7 @@ class ScopeResult:
     skip: bool = False
     """``True`` when no tables matched — downstream checks should be skipped."""
 
-    matched: Set[Tuple[str, str]] = field(default_factory=set)
+    matched: set[tuple[str, str]] = field(default_factory=set)
     """Set of ``(schema_name, table_name)`` pairs that matched the filters."""
 
     elapsed: float = 0.0
@@ -34,12 +34,12 @@ class ScopeResult:
 def resolve_table_scope(
     spark,
     warehouse_name: str,
-    schema_names: Optional[List[str]],
-    table_names: Optional[List[str]],
+    schema_names: list[str] | None,
+    table_names: list[str] | None,
     check_labels: str,
-    workspace_id: Optional[str] = None,
-    warehouse_id: Optional[str] = None,
-    log_fn: Optional[Callable[..., None]] = None,
+    workspace_id: str | None = None,
+    warehouse_id: str | None = None,
+    log_fn: Callable[..., None] | None = None,
 ) -> ScopeResult:
     """Resolve which tables are in scope.
 
@@ -85,7 +85,7 @@ def resolve_table_scope(
         )
         rows = tbl_df.collect()
 
-        matched: Set[Tuple[str, str]] = set()
+        matched: set[tuple[str, str]] = set()
         schema_filter = (
             {x.lower() for x in schema_names} if schema_names else None
         )
