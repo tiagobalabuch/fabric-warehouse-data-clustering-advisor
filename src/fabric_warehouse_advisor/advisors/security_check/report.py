@@ -17,6 +17,7 @@ from .findings import (
     LEVEL_LOW,
     LEVEL_INFO,
     SEVERITY_ORDER,
+    CATEGORY_AUTH_MODE,
     CATEGORY_PERMISSIONS,
     CATEGORY_ROLES,
     CATEGORY_RLS,
@@ -28,12 +29,16 @@ from .findings import (
     CATEGORY_ITEM_PERMISSIONS,
     CATEGORY_SENSITIVITY_LABELS,
     CATEGORY_ROLE_ALIGNMENT,
+    CATEGORY_ONELAKE_DATA_ACCESS,
+    CATEGORY_ONELAKE_SETTINGS,
+    CATEGORY_ONELAKE_SECURITY_SYNC,
 )
 
 
 # -- Category display metadata ------------------------------------------
 
 _CATEGORY_LABELS = {
+    CATEGORY_AUTH_MODE: "Access Mode",
     CATEGORY_PERMISSIONS: "Schema Permissions",
     CATEGORY_ROLES: "Custom Roles",
     CATEGORY_RLS: "Row-Level Security",
@@ -45,9 +50,13 @@ _CATEGORY_LABELS = {
     CATEGORY_ITEM_PERMISSIONS: "Item Permissions",
     CATEGORY_SENSITIVITY_LABELS: "Sensitivity Labels",
     CATEGORY_ROLE_ALIGNMENT: "Role Alignment",
+    CATEGORY_ONELAKE_DATA_ACCESS: "OneLake Data Access Roles",
+    CATEGORY_ONELAKE_SETTINGS: "OneLake Settings",
+    CATEGORY_ONELAKE_SECURITY_SYNC: "OneLake Security Sync",
 }
 
 _CATEGORY_ORDER = [
+    CATEGORY_AUTH_MODE,
     CATEGORY_PERMISSIONS,
     CATEGORY_ROLES,
     CATEGORY_RLS,
@@ -59,6 +68,9 @@ _CATEGORY_ORDER = [
     CATEGORY_ITEM_PERMISSIONS,
     CATEGORY_SENSITIVITY_LABELS,
     CATEGORY_ROLE_ALIGNMENT,
+    CATEGORY_ONELAKE_DATA_ACCESS,
+    CATEGORY_ONELAKE_SETTINGS,
+    CATEGORY_ONELAKE_SECURITY_SYNC,
 ]
 
 _LEVEL_ICONS = {
@@ -78,6 +90,56 @@ def _edition_label(edition: str | None, *, capitalize: bool = True) -> str:
     return "SQL endpoint" if is_sql_endpoint else "warehouse"
 
 
+def _auth_mode_label(auth_mode: str) -> str:
+    """Return a human-readable auth mode label."""
+    if auth_mode == "user_identity":
+        return "User Identity (OneLake security for tables)"
+    if auth_mode == "delegated":
+        return "Delegated Identity (SQL security for all objects)"
+    return ""
+
+
+_AUTH_MODE_EXPLAINER = {
+    "user_identity": (
+        "This SQL endpoint is running in User Identity mode. "
+        "Table-level access is controlled exclusively by OneLake "
+        "security roles. SQL RLS, CLS, DDM, and custom database roles "
+        "are inactive. SQL permissions on views, stored procedures, "
+        "and functions remain enforced."
+    ),
+    "delegated": (
+        "This SQL endpoint is running in Delegated Identity mode. "
+        "SQL security (permissions, RLS, CLS, DDM) controls access "
+        "to all objects. OneLake data access roles exist but are not "
+        "enforced at SQL query time — the item owner's identity is "
+        "used for OneLake access."
+    ),
+}
+
+_AUTH_MODE_RECOMMENDATIONS = {
+    "user_identity": (
+        "• Review OneLake data access roles to ensure least-privilege "
+        "table access.\n"
+        "• DefaultReader role should be removed or scoped down if "
+        "custom roles are defined.\n"
+        "• SQL permissions on views/sprocs/functions are still "
+        "enforced — audit them via the Schema Permissions section.\n"
+        "• Monitor the Security Sync Health section for propagation "
+        "issues."
+    ),
+    "delegated": (
+        "• Ensure SQL RLS, CLS, and DDM policies are correctly "
+        "configured for all sensitive tables.\n"
+        "• Custom database roles should follow least-privilege "
+        "principles.\n"
+        "• OneLake data access roles shown above are informational "
+        "only — they are not enforced in this mode.\n"
+        "• Consider switching to User Identity mode if you want "
+        "OneLake security to control table-level access."
+    ),
+}
+
+
 # ======================================================================
 # TEXT REPORT
 # ======================================================================
@@ -93,7 +155,16 @@ def generate_text_report(summary: CheckSummary) -> str:
     lines.append("╚" + "═" * w + "╝")
     lines.append("")
     lines.append(f"  {item} : {summary.warehouse_name}")
+    if summary.auth_mode:
+        lines.append(f"  Auth Mode : {_auth_mode_label(summary.auth_mode)}")
     lines.append("")
+
+    # Auth mode explainer
+    if summary.auth_mode in _AUTH_MODE_EXPLAINER:
+        lines.append("━" * w)
+        lines.append(f"  {_AUTH_MODE_EXPLAINER[summary.auth_mode]}")
+        lines.append("━" * w)
+        lines.append("")
 
     # Summary bar
     lines.append("━" * w)
@@ -150,6 +221,15 @@ def generate_text_report(summary: CheckSummary) -> str:
                         lines.append(f"    SQL: {f.sql_fix}")
                     lines.append("")
 
+    # Auth mode recommendations
+    if summary.auth_mode in _AUTH_MODE_RECOMMENDATIONS:
+        mode_label = _auth_mode_label(summary.auth_mode)
+        lines.append(f"━━━ RECOMMENDATIONS ({mode_label}) ━━━")
+        lines.append("")
+        for line in _AUTH_MODE_RECOMMENDATIONS[summary.auth_mode].split("\n"):
+            lines.append(f"  {line}")
+        lines.append("")
+
     # Footer
     lines.append("═" * w)
     lines.append("  Generated by Fabric Warehouse Advisor — Security Check")
@@ -172,7 +252,14 @@ def generate_markdown_report(summary: CheckSummary) -> str:
     lines.append(f"| Property | Value |")
     lines.append(f"|----------|-------| ")
     lines.append(f"| {item} | `{summary.warehouse_name}` |")
+    if summary.auth_mode:
+        lines.append(f"| Auth Mode | {_auth_mode_label(summary.auth_mode)} |")
     lines.append("")
+
+    # Auth mode explainer
+    if summary.auth_mode in _AUTH_MODE_EXPLAINER:
+        lines.append(f"> **ℹ️ {_AUTH_MODE_EXPLAINER[summary.auth_mode]}**")
+        lines.append("")
 
     # Summary
     lines.append("## Summary")
@@ -245,6 +332,15 @@ def generate_markdown_report(summary: CheckSummary) -> str:
                         lines.append(f"  ```")
                     lines.append("")
 
+    # Auth mode recommendations
+    if summary.auth_mode in _AUTH_MODE_RECOMMENDATIONS:
+        mode_label = _auth_mode_label(summary.auth_mode)
+        lines.append(f"## Recommendations ({mode_label})")
+        lines.append("")
+        for line in _AUTH_MODE_RECOMMENDATIONS[summary.auth_mode].split("\n"):
+            lines.append(line)
+        lines.append("")
+
     # Footer
     lines.append("---")
     lines.append("*Generated by Fabric Warehouse Advisor — Security Check*")
@@ -310,6 +406,19 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         summary.medium_count, summary.low_count,
         summary.info_count, total,
     ))
+
+    # Auth mode explainer banner (HTML)
+    if summary.auth_mode in _AUTH_MODE_EXPLAINER:
+        mode_label = _auth_mode_label(summary.auth_mode)
+        explainer = esc(_AUTH_MODE_EXPLAINER[summary.auth_mode])
+        h.append(
+            '<div style="background:var(--bg-card,#f0f4f8);border-left:4px solid '
+            'var(--accent,#4a90d9);padding:12px 16px;margin:16px 0;'
+            'border-radius:6px;font-size:0.92em;">'
+            f'<strong>Access Mode:</strong> {esc(mode_label)}<br>'
+            f'<span style="color:var(--text-muted,#666);">{explainer}</span>'
+            '</div>'
+        )
 
     if not active_cats:
         h.append(
@@ -400,6 +509,21 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         h.append('</tbody></table>')
         h.append('</div></div>')  # table-scroll + table-container
         h.append('</div>')  # tab-pane
+
+    # ── Auth mode recommendations ─────────────────────────────────
+    if summary.auth_mode in _AUTH_MODE_RECOMMENDATIONS:
+        mode_label = _auth_mode_label(summary.auth_mode)
+        recs = esc(_AUTH_MODE_RECOMMENDATIONS[summary.auth_mode])
+        rec_items = [r.lstrip("• ") for r in recs.split("\n") if r.strip()]
+        h.append(
+            '<div style="margin:24px 0;padding:16px 20px;'
+            'background:var(--bg-card,#f9fafb);border-radius:8px;">'
+            f'<h3 style="margin-top:0;">Recommendations — {esc(mode_label)}</h3>'
+            '<ul style="margin-bottom:0;">'
+        )
+        for ri in rec_items:
+            h.append(f'<li>{ri}</li>')
+        h.append('</ul></div>')
 
     # ── Footer ──────────────────────────────────────────────────────
     h.append(render_footer(

@@ -165,6 +165,21 @@ class SecurityCheckConfig:
     # -- SEC-011: Role Alignment --
     check_role_alignment: bool = True
 
+    # -- Auth mode detection --
+    check_auth_mode: bool = True
+
+    # -- OneLake Security (SEC-012..014) --
+    check_onelake_data_access_roles: bool = True
+    check_onelake_settings: bool = True
+    check_onelake_security_sync: bool = True
+
+    # -- SEC-012: OneLake Data Access Roles thresholds --
+    max_onelake_roles: int = 20
+    flag_readwrite_with_constraints: bool = True
+    flag_default_reader_with_custom_roles: bool = True
+    flag_wildcard_path_roles: bool = True
+    flag_empty_onelake_roles: bool = True
+
     # -- Scope filtering --
     schema_names: list[str] = field(default_factory=list)
     table_names: list[str] = field(default_factory=list)

@@ -185,8 +185,18 @@ def check_schema_permissions(
     spark: SparkSession,
     warehouse: str,
     config: SecurityCheckConfig,
+    *,
+    user_identity_mode: bool = False,
 ) -> List[Finding]:
     """Analyse schema-level permission grants (explicit and implicit).
+
+    Parameters
+    ----------
+    user_identity_mode : bool
+        When *True*, table-level permission findings are downgraded
+        to INFO because SQL permissions on tables are not enforced
+        in User Identity mode — access is controlled by OneLake
+        security roles.
 
     Returns
     -------
@@ -227,6 +237,29 @@ def check_schema_permissions(
     explicit = [r for r in rows if r["PermissionType"] == "<explicit>"]
     implicit = [r for r in rows if r["PermissionType"] == "<implicit>"]
 
+    # Helper: downgrade table-level findings in User Identity mode
+    _UI_NOTE = (
+        " [User Identity mode — table-level SQL permissions are not "
+        "enforced; access is controlled by OneLake security roles.]"
+    )
+
+    def _table_level(row) -> bool:
+        """True if the row targets a user table object."""
+        return (
+            row["ObjectType"] == "USER_TABLE"
+            and _securable_type(row["Securable"]) == "Object"
+        )
+
+    def _effective_level(base_level: str, row) -> str:
+        if user_identity_mode and _table_level(row):
+            return LEVEL_INFO
+        return base_level
+
+    def _effective_detail(detail: str, row) -> str:
+        if user_identity_mode and _table_level(row):
+            return detail + _UI_NOTE
+        return detail
+
     # --- Check: public role grants (explicit) ---
     if config.flag_public_role_grants:
         public_grants = [
@@ -238,14 +271,15 @@ def check_schema_permissions(
             perm = r["Permission"]
             securable = r["Securable"]
             findings.append(Finding(
-                level=LEVEL_HIGH,
+                level=_effective_level(LEVEL_HIGH, r),
                 category=CATEGORY_PERMISSIONS,
                 check_name="public_role_grant",
                 object_name=securable,
                 message=f"{perm} granted to the public role on {securable}.",
-                detail=(
+                detail=_effective_detail(
                     f"Permission {r['Action']} {perm} on {securable} "
-                    f"is granted to the public role — every database user inherits it."
+                    f"is granted to the public role — every database user inherits it.",
+                    r,
                 ),
                 recommendation=(
                     "Revoke the grant from public and assign it to a "
@@ -269,15 +303,16 @@ def check_schema_permissions(
             col_info = r["ColumnName"]
             detail_suffix = f" (columns: {col_info})" if col_info else ""
             findings.append(Finding(
-                level=LEVEL_MEDIUM,
+                level=_effective_level(LEVEL_MEDIUM, r),
                 category=CATEGORY_PERMISSIONS,
                 check_name="direct_user_grant",
                 object_name=securable,
                 message=f"{perm} granted directly to user [{principal}] on {securable}.",
-                detail=(
+                detail=_effective_detail(
                     f"Granting permissions directly to individual users is harder "
                     f"to audit and manage at scale than role-based grants."
-                    f"{detail_suffix}"
+                    f"{detail_suffix}",
+                    r,
                 ),
                 recommendation=(
                     f"Create a custom role, grant {perm} to the role, "
@@ -361,17 +396,18 @@ def check_schema_permissions(
         principal = r["DatabasePrincipal"]
         securable = r["Securable"] or "(unknown)"
         findings.append(Finding(
-            level=LEVEL_HIGH,
+            level=_effective_level(LEVEL_HIGH, r),
             category=CATEGORY_PERMISSIONS,
             check_name="grant_with_grant_option",
                 object_name=securable,
             message=(
                 f"[{principal}] has {perm} WITH GRANT OPTION on {securable}."
             ),
-            detail=(
+            detail=_effective_detail(
                 f"GRANT OPTION allows [{principal}] to delegate {perm} to "
                 f"other principals, expanding the permission surface "
-                f"without administrator intervention."
+                f"without administrator intervention.",
+                r,
             ),
             recommendation=(
                 f"Remove GRANT OPTION unless [{principal}] explicitly needs "
