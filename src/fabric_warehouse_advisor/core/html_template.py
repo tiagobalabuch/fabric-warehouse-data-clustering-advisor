@@ -181,6 +181,22 @@ REPORT_CSS = r"""<style>
     color: #ffffff;
     word-break: break-all;
   }
+  .auth-mode-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed rgba(255,255,255,0.15);
+    font-size: 11px;
+  }
+  .mode-label {
+    color: rgba(255,255,255,0.4);
+  }
+  .mode-value {
+    color: #32C5A5;
+    font-weight: 600;
+  }
 
   .tabs-nav {
     flex: 1;
@@ -190,6 +206,17 @@ REPORT_CSS = r"""<style>
     flex-direction: column;
     gap: 4px;
   }
+  .sidebar-section-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: rgba(255,255,255,0.35);
+    padding: 12px 16px 4px;
+    margin-top: 4px;
+    user-select: none;
+  }
+  .sidebar-section-label:first-child { margin-top: 0; padding-top: 0; }
 
   .tab-btn {
     background: transparent;
@@ -374,6 +401,30 @@ REPORT_CSS = r"""<style>
     animation: fadeSlideIn 0.2s ease forwards;
   }
   .tab-pane.active { display: block; }
+
+  /* Contextual alert boxes inside tab panes */
+  .context-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .context-alert.alert-warning {
+    background: var(--c-high-bg);
+    border-left: 4px solid var(--c-high);
+    color: var(--c-high-text);
+  }
+  .context-alert.alert-info {
+    background: var(--c-info-bg);
+    border-left: 4px solid var(--c-info);
+    color: var(--c-info-text);
+  }
+  .context-alert-icon { flex-shrink: 0; font-size: 16px; margin-top: 1px; }
   @keyframes fadeSlideIn {
     from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
@@ -829,6 +880,7 @@ def render_sidebar(
     *,
     generated_at: str = "",
     badge_label: str = "Warehouse",
+    auth_mode: str = "",
 ) -> str:
     """Render the sidebar with brand, warehouse badge, tab nav, and footer.
 
@@ -847,6 +899,9 @@ def render_sidebar(
         Timestamp shown in the sidebar footer.
     badge_label : str
         Label above the warehouse name (e.g. "Warehouse" or "SQL Endpoint").
+    auth_mode : str
+        Auth mode string ("user_identity" or "delegated"). If set, a small
+        pill badge is rendered below the warehouse name in the sidebar.
     """
     icon = REPORT_ICONS.get(report_type, "\U0001f4cb")
     parts: list[str] = [
@@ -858,22 +913,43 @@ def render_sidebar(
         '<div class="warehouse-badge">',
         f'<div class="warehouse-badge-label">{esc(badge_label)}</div>',
         f'<div class="warehouse-badge-name">{esc(warehouse_name)}</div>',
+    ]
+    if auth_mode:
+        mode_text = 'User Identity' if auth_mode == 'user_identity' else 'Delegated'
+        parts.append(
+            '<div class="auth-mode-kv">'
+            '<span class="mode-label">Access Mode</span>'
+            f'<span class="mode-value">{mode_text}</span>'
+            '</div>'
+        )
+    parts += [
         '</div>',
     ]
 
     # Tab navigation
+    # Items can be (pane_id, label) tuples for tab buttons,
+    # or plain strings for non-clickable section dividers.
     if tabs:
         parts.append('<nav class="tabs-nav" role="tablist">')
-        for idx, (pane_id, label) in enumerate(tabs):
-            active_cls = " active" if idx == 0 else ""
-            selected = "true" if idx == 0 else "false"
-            parts.append(
-                f'<button class="tab-btn{active_cls}" '
-                f'data-target="{pane_id}" '
-                f'role="tab" aria-selected="{selected}">'
-                f'{esc(label)} '
-                f'<span class="tab-count"></span></button>'
-            )
+        first_tab = True
+        for item in tabs:
+            if isinstance(item, str):
+                # Section divider label
+                parts.append(
+                    f'<div class="sidebar-section-label">{esc(item)}</div>'
+                )
+            else:
+                pane_id, label = item
+                active_cls = " active" if first_tab else ""
+                selected = "true" if first_tab else "false"
+                parts.append(
+                    f'<button class="tab-btn{active_cls}" '
+                    f'data-target="{pane_id}" '
+                    f'role="tab" aria-selected="{selected}">'
+                    f'{esc(label)} '
+                    f'<span class="tab-count"></span></button>'
+                )
+                first_tab = False
         parts.append('</nav>')
 
     # Footer

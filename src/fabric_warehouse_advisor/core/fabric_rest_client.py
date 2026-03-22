@@ -30,6 +30,7 @@ except ImportError:
 
 
 _FABRIC_API_BASE = "https://api.fabric.microsoft.com/v1"
+_FABRIC_API_V10_BASE = "https://api.fabric.microsoft.com/v1.0/myorg"
 _FABRIC_AUDIENCE = "https://api.fabric.microsoft.com"
 
 
@@ -584,6 +585,133 @@ class FabricRestClient:
         if item_type:
             url += f"?type={item_type}"
         return self.get(url)
+
+    # ── OneLake Settings API ──────────────────────────────────────
+
+    def get_onelake_settings(
+        self,
+        workspace_id: str,
+    ) -> Dict[str, Any]:
+        """Retrieve workspace-level OneLake settings.
+
+        ``GET /v1/workspaces/{workspaceId}/onelake/settings``
+
+        Requires **Admin** workspace role.
+
+        Returns
+        -------
+        dict
+            Keys: ``diagnostics`` (with ``status``, ``destination``),
+            ``immutabilityPolicies`` (optional list).
+        """
+        url = (
+            f"{_FABRIC_API_BASE}/workspaces/{workspace_id}/onelake/settings"
+        )
+        return self.get(url)
+
+    # ── OneLake Data Access Security API ──────────────────────────
+
+    def list_data_access_roles(
+        self,
+        workspace_id: str,
+        item_id: str,
+    ) -> List[Dict[str, Any]]:
+        """List all OneLake data access roles for an item (paginated).
+
+        ``GET /v1/workspaces/{workspaceId}/items/{itemId}/dataAccessRoles``
+
+        Requires **Member** or higher workspace role.
+        Scope: ``OneLake.Read.All`` or ``OneLake.ReadWrite.All``.
+
+        .. note::
+
+           This API is currently in **Preview**.
+
+        Returns
+        -------
+        list[dict]
+            Each dict contains ``name``, ``id``, ``eTag``,
+            ``decisionRules`` (with ``effect``, ``permission``,
+            ``constraints``), and ``members`` (with
+            ``fabricItemMembers``, ``microsoftEntraMembers``).
+        """
+        url = (
+            f"{_FABRIC_API_BASE}/workspaces/{workspace_id}"
+            f"/items/{item_id}/dataAccessRoles"
+        )
+        return self.get_paginated(url)
+
+    # ── Lakehouse API ─────────────────────────────────────────────
+
+    def list_lakehouses(
+        self,
+        workspace_id: str,
+    ) -> List[Dict[str, Any]]:
+        """List all lakehouses in a workspace (paginated).
+
+        ``GET /v1/workspaces/{workspaceId}/lakehouses``
+
+        Requires **Viewer** or higher workspace role.
+        """
+        url = f"{_FABRIC_API_BASE}/workspaces/{workspace_id}/lakehouses"
+        return self.get_paginated(url)
+
+    def resolve_lakehouse(
+        self,
+        workspace_id: str,
+        lakehouse_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve a lakehouse display name to its full API object.
+
+        Calls :meth:`list_lakehouses` and matches by ``displayName``
+        (case-insensitive).  Returns the entire dict (including ``id``,
+        ``displayName``, etc.) or ``None`` if no match is found.
+        """
+        lakehouses = self.list_lakehouses(workspace_id)
+        name_lower = lakehouse_name.lower()
+        for lh in lakehouses:
+            if lh.get("displayName", "").lower() == name_lower:
+                return lh
+        return None
+
+    # ── Auth Mode (undocumented internal API) ─────────────────────
+
+    def get_sql_endpoint_auth_mode(
+        self,
+        sql_endpoint_id: str,
+    ) -> str:
+        """Detect the SQL analytics endpoint access mode.
+
+        Calls an undocumented internal API:
+        ``GET /v1.0/myorg/lhdatamarts/{id}/parameters?name=UniversalSecurityMode``
+
+        Returns
+        -------
+        str
+            ``"user_identity"`` if ``UniversalSecurityMode`` is True,
+            ``"delegated"`` if False, or ``""`` if detection fails.
+
+        .. warning::
+
+           This API is **undocumented** and may change without notice.
+        """
+        url = (
+            f"{_FABRIC_API_V10_BASE}/lhdatamarts/{sql_endpoint_id}"
+            f"/parameters?name=UniversalSecurityMode"
+        )
+        try:
+            data = self.get(url)
+        except FabricRestError:
+            return ""
+        params = data.get("parameters", []) if isinstance(data, dict) else []
+        for p in params:
+            if p.get("name") == "UniversalSecurityMode":
+                val = str(p.get("value", "")).strip()
+                if val.lower() == "true":
+                    return "user_identity"
+                if val.lower() == "false":
+                    return "delegated"
+        return ""
 
     # ── Private helpers ───────────────────────────────────────────
 

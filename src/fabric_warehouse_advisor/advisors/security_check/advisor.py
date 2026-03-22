@@ -27,7 +27,14 @@ from datetime import datetime, timezone
 from pyspark.sql import SparkSession
 
 from .config import SecurityCheckConfig
-from .findings import Finding, CheckSummary
+from .findings import (
+    Finding, CheckSummary,
+    LEVEL_INFO,
+    CATEGORY_ROLES,
+    CATEGORY_RLS,
+    CATEGORY_CLS,
+    CATEGORY_DDM,
+)
 from .checks.schema_permissions import check_schema_permissions
 from .checks.custom_roles import check_custom_roles
 from .checks.row_level_security import check_row_level_security
@@ -39,6 +46,10 @@ from .checks.sql_audit import check_sql_audit
 from .checks.item_permissions import check_item_permissions
 from .checks.sensitivity_labels import check_sensitivity_labels
 from .checks.role_alignment import check_role_alignment
+from .checks.auth_mode import detect_auth_mode
+from .checks.onelake_data_access_roles import check_onelake_data_access_roles
+from .checks.onelake_settings import check_onelake_settings
+from .checks.onelake_security_sync import check_onelake_security_sync
 from ..performance_check.checks.warehouse_type import detect_warehouse_edition
 from .report import (
     generate_text_report,
@@ -234,6 +245,10 @@ class SecurityCheckAdvisor:
         self._log_kv("check_item_permissions", cfg.check_item_permissions)
         self._log_kv("check_sensitivity_labels", cfg.check_sensitivity_labels)
         self._log_kv("check_role_alignment", cfg.check_role_alignment)
+        self._log_kv("check_auth_mode", cfg.check_auth_mode)
+        self._log_kv("check_onelake_data_access_roles", cfg.check_onelake_data_access_roles)
+        self._log_kv("check_onelake_settings", cfg.check_onelake_settings)
+        self._log_kv("check_onelake_security_sync", cfg.check_onelake_security_sync)
         self._log_footer()
 
         _run_start = time.perf_counter()
@@ -244,7 +259,7 @@ class SecurityCheckAdvisor:
         all_findings: list[Finding] = []
 
         # ================================================================
-        # Phase 0: Detect warehouse edition
+        # Phase 0a: Detect warehouse edition
         # ================================================================
         edition = ""
 
@@ -258,117 +273,19 @@ class SecurityCheckAdvisor:
             return findings
 
         pr = tracker.run_phase(
-            "Phase 0: Edition detection", _detect_edition_wrapper,
+            "Phase 0a: Edition detection", _detect_edition_wrapper,
         )
         all_findings.extend(pr.findings)
 
         # Set user-facing item label based on detected edition
-        if edition == "LakeWarehouse" or cfg.sql_endpoint_id:
+        is_sql_endpoint = edition == "LakeWarehouse"
+        if is_sql_endpoint or cfg.sql_endpoint_id:
             cfg.item_label = "SQL endpoint"
         else:
             cfg.item_label = "warehouse"
 
         # ================================================================
-        # Phase 1: Schema Permissions (SEC-001)
-        # ================================================================
-        if cfg.check_schema_permissions:
-            pr = tracker.run_phase(
-                "Phase 1: Schema Permissions",
-                check_schema_permissions, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(pr.findings)
-        else:
-            print("Phase 1: Schema Permissions — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 1: Schema Permissions", status=PHASE_SKIPPED, skip_reason="disabled in config"))
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-
-        # ================================================================
-        # Phase 2: Custom Roles (SEC-002)
-        # ================================================================
-        if cfg.check_custom_roles:
-            pr = tracker.run_phase(
-                "Phase 2: Custom Roles",
-                check_custom_roles, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(pr.findings)
-        else:
-            print("Phase 2: Custom Roles — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 2: Custom Roles", status=PHASE_SKIPPED, skip_reason="disabled in config"))
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-
-        # ================================================================
-        # Scope resolution
-        # ================================================================
-        _any_table_checks = cfg.check_rls or cfg.check_cls or cfg.check_ddm
-        _skip_table_checks = False
-
-        if _any_table_checks:
-            scope = resolve_table_scope(
-                spark, cfg.warehouse_name,
-                cfg.schema_names, cfg.table_names,
-                check_labels="RLS, CLS, DDM",
-                workspace_id=cfg.workspace_id,
-                warehouse_id=cfg.warehouse_id,
-                log_fn=self._log,
-            )
-            _skip_table_checks = scope.skip
-
-        # ================================================================
-        # Phase 3: Row-Level Security (SEC-003)
-        # ================================================================
-        if cfg.check_rls and not _skip_table_checks:
-            pr = tracker.run_phase(
-                "Phase 3: Row-Level Security",
-                check_row_level_security, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(pr.findings)
-        elif not cfg.check_rls:
-            print("Phase 3: Row-Level Security — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 3: Row-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
-        else:
-            print("Phase 3: Row-Level Security — SKIPPED (no tables in scope)")
-            tracker.record(PhaseResult(name="Phase 3: Row-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-
-        # ================================================================
-        # Phase 4: Column-Level Security (SEC-004)
-        # ================================================================
-        if cfg.check_cls and not _skip_table_checks:
-            pr = tracker.run_phase(
-                "Phase 4: Column-Level Security",
-                check_column_level_security, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(pr.findings)
-        elif not cfg.check_cls:
-            print("Phase 4: Column-Level Security — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 4: Column-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
-        else:
-            print("Phase 4: Column-Level Security — SKIPPED (no tables in scope)")
-            tracker.record(PhaseResult(name="Phase 4: Column-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-
-        # ================================================================
-        # Phase 5: Dynamic Data Masking (SEC-005)
-        # ================================================================
-        if cfg.check_ddm and not _skip_table_checks:
-            pr = tracker.run_phase(
-                "Phase 5: Dynamic Data Masking",
-                check_dynamic_data_masking, spark, cfg.warehouse_name, cfg,
-            )
-            all_findings.extend(pr.findings)
-        elif not cfg.check_ddm:
-            print("Phase 5: Dynamic Data Masking — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 5: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="disabled in config"))
-        else:
-            print("Phase 5: Dynamic Data Masking — SKIPPED (no tables in scope)")
-            tracker.record(PhaseResult(name="Phase 5: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
-
-        # ================================================================
-        # REST API checks — resolve token once for all REST phases
+        # REST API client — resolve token once for all REST phases
         # ================================================================
         rest_client: FabricRestClient | None = None
         any_rest_check = (
@@ -378,6 +295,9 @@ class SecurityCheckAdvisor:
             or cfg.check_item_permissions
             or cfg.check_sensitivity_labels
             or cfg.check_role_alignment
+            or cfg.check_onelake_data_access_roles
+            or cfg.check_onelake_settings
+            or cfg.check_auth_mode
         )
         if any_rest_check:
             rest_client = FabricRestClient(
@@ -405,8 +325,9 @@ class SecurityCheckAdvisor:
                     "    Set workspace_id in config to enable REST API checks."
                 )
 
+        # ================================================================
         # Resolve warehouse_id from warehouse_name if needed
-        is_sql_endpoint = edition == "LakeWarehouse"
+        # ================================================================
         resolved_warehouse_id = cfg.warehouse_id or cfg.sql_endpoint_id
         resolved_warehouse_info: dict | None = None
         needs_warehouse = (
@@ -462,10 +383,50 @@ class SecurityCheckAdvisor:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 6: Workspace Roles (SEC-006) — REST API
+        # Phase 0b: Auth mode detection (LakeWarehouse only)
         # ================================================================
-        # Fetch workspace role assignments once — shared by SEC-006,
-        # SEC-009, and SEC-011.
+        auth_mode = ""
+        resolved_sql_endpoint_id = cfg.sql_endpoint_id or (
+            resolved_warehouse_id if is_sql_endpoint else ""
+        )
+
+        if (
+            cfg.check_auth_mode
+            and is_sql_endpoint
+            and rest_client
+            and resolved_sql_endpoint_id
+        ):
+            def _detect_auth_mode_wrapper() -> list[Finding]:
+                nonlocal auth_mode
+                auth_mode, findings = detect_auth_mode(
+                    rest_client, resolved_sql_endpoint_id, cfg,
+                )
+                self._log(f"  Auth mode: {auth_mode or '(unknown)'}")
+                return findings
+
+            pr = tracker.run_phase(
+                "Phase 0b: Auth mode detection", _detect_auth_mode_wrapper,
+            )
+            all_findings.extend(pr.findings)
+        elif cfg.check_auth_mode and is_sql_endpoint and not resolved_sql_endpoint_id:
+            print("  ℹ Phase 0b: Auth mode detection — SKIPPED (sql_endpoint_id not resolved)")
+            tracker.record(PhaseResult(name="Phase 0b: Auth mode detection", status=PHASE_SKIPPED, skip_reason="sql_endpoint_id not resolved"))
+        elif cfg.check_auth_mode and not is_sql_endpoint:
+            self._log("  Phase 0b: Auth mode detection — N/A (Warehouse edition)")
+
+        user_identity_mode = auth_mode == "user_identity"
+
+        if auth_mode:
+            mode_desc = "User Identity" if user_identity_mode else "Delegated Identity"
+            print(f"  Auth Mode : {mode_desc}")
+            print()
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Workspace REST data — fetch once, share across phases
+        # ================================================================
         workspace_role_assignments: list[dict] | None = None
         _needs_ws_roles = (
             cfg.check_workspace_roles
@@ -480,9 +441,12 @@ class SecurityCheckAdvisor:
             except FabricRestError:
                 workspace_role_assignments = None
 
+        # ================================================================
+        # Phase 1: Workspace Roles (SEC-006) — REST API
+        # ================================================================
         if cfg.check_workspace_roles and rest_client and cfg.workspace_id:
             pr = tracker.run_phase(
-                "Phase 6: Workspace Roles",
+                "Phase 1: Workspace Roles",
                 check_workspace_roles, rest_client, cfg.workspace_id, cfg,
             )
             all_findings.extend(pr.findings)
@@ -492,17 +456,17 @@ class SecurityCheckAdvisor:
                 else "no REST token" if not rest_client
                 else "workspace_id not set"
             )
-            print(f"  ℹ Phase 6: Workspace Roles — SKIPPED ({reason})")
-            tracker.record(PhaseResult(name="Phase 6: Workspace Roles", status=PHASE_SKIPPED, skip_reason=reason))
+            print(f"  ℹ Phase 1: Workspace Roles — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 1: Workspace Roles", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 7: Network Isolation (SEC-007) — REST API
+        # Phase 2: Network Isolation (SEC-007) — REST API
         # ================================================================
         if cfg.check_network_isolation and rest_client and cfg.workspace_id:
             pr = tracker.run_phase(
-                "Phase 7: Network Isolation",
+                "Phase 2: Network Isolation",
                 check_network_isolation, rest_client, cfg.workspace_id, cfg,
             )
             all_findings.extend(pr.findings)
@@ -512,17 +476,37 @@ class SecurityCheckAdvisor:
                 else "no REST token" if not rest_client
                 else "workspace_id not set"
             )
-            print(f"  ℹ Phase 7: Network Isolation — SKIPPED ({reason})")
-            tracker.record(PhaseResult(name="Phase 7: Network Isolation", status=PHASE_SKIPPED, skip_reason=reason))
+            print(f"  ℹ Phase 2: Network Isolation — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 2: Network Isolation", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 8: SQL Audit Settings (SEC-008) — REST API
+        # Phase 3: OneLake Settings (SEC-013) — REST API (workspace-level)
+        # ================================================================
+        if cfg.check_onelake_settings and rest_client and cfg.workspace_id:
+            pr = tracker.run_phase(
+                "Phase 3: OneLake Settings",
+                check_onelake_settings, rest_client, cfg.workspace_id, cfg,
+            )
+            all_findings.extend(pr.findings)
+        else:
+            reason = (
+                "disabled in config" if not cfg.check_onelake_settings
+                else "no REST token" if not rest_client
+                else "workspace_id not set"
+            )
+            print(f"  ℹ Phase 3: OneLake Settings — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 3: OneLake Settings", status=PHASE_SKIPPED, skip_reason=reason))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 4: SQL Audit Settings (SEC-008) — REST API
         # ================================================================
         if cfg.check_sql_audit and rest_client and cfg.workspace_id and resolved_warehouse_id:
             pr = tracker.run_phase(
-                "Phase 8: SQL Audit Settings",
+                "Phase 4: SQL Audit Settings",
                 check_sql_audit, rest_client, cfg.workspace_id,
                 resolved_warehouse_id, cfg, is_sql_endpoint,
             )
@@ -534,17 +518,15 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set" if not cfg.workspace_id
                 else "warehouse_id could not be resolved"
             )
-            print(f"  ℹ Phase 8: SQL Audit Settings — SKIPPED ({reason})")
-            tracker.record(PhaseResult(name="Phase 8: SQL Audit Settings", status=PHASE_SKIPPED, skip_reason=reason))
-
+            print(f"  ℹ Phase 4: SQL Audit Settings — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 4: SQL Audit Settings", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 9: Item Permissions (SEC-009) — Admin API
+        # Phase 5: Item Permissions (SEC-009) — Admin API
         # ================================================================
         if cfg.check_item_permissions and rest_client and cfg.workspace_id and resolved_warehouse_id:
-            # Build principal→role lookup for SEC-009 cross-reference
             ws_principal_roles: dict[str, str] = {}
             if workspace_role_assignments:
                 for a in workspace_role_assignments:
@@ -553,7 +535,7 @@ class SecurityCheckAdvisor:
                         ws_principal_roles[pid] = a.get("role", "")
 
             pr = tracker.run_phase(
-                "Phase 9: Item Permissions",
+                "Phase 5: Item Permissions",
                 check_item_permissions, rest_client, cfg.workspace_id,
                 resolved_warehouse_id, cfg, ws_principal_roles,
                 is_sql_endpoint,
@@ -566,23 +548,16 @@ class SecurityCheckAdvisor:
                 else "workspace_id not set" if not cfg.workspace_id
                 else "warehouse_id could not be resolved"
             )
-            print(f"  ℹ Phase 9: Item Permissions — SKIPPED ({reason})")
-            tracker.record(PhaseResult(name="Phase 9: Item Permissions", status=PHASE_SKIPPED, skip_reason=reason))
-
+            print(f"  ℹ Phase 5: Item Permissions — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 5: Item Permissions", status=PHASE_SKIPPED, skip_reason=reason))
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 10: Sensitivity Labels (SEC-010) — from list_warehouses
-        #           or list_sql_endpoints (LakeWarehouse edition)
+        # Phase 6: Sensitivity Labels (SEC-010)
         # ================================================================
         if cfg.check_sensitivity_labels and rest_client and cfg.workspace_id:
             wh_info = resolved_warehouse_info
-            # If warehouse_id was provided manually (not resolved via
-            # list_warehouses / list_sql_endpoints), we lack the
-            # sensitivityLabel field.  Attempt a fresh resolution;
-            # fall back to a minimal dict which will cause the check
-            # to report "no label found."
             if not wh_info and resolved_warehouse_id:
                 try:
                     if is_sql_endpoint:
@@ -599,41 +574,318 @@ class SecurityCheckAdvisor:
                 wh_info = {"id": resolved_warehouse_id, "displayName": cfg.warehouse_name}
             if wh_info:
                 pr = tracker.run_phase(
-                    "Phase 10: Sensitivity Labels",
+                    "Phase 6: Sensitivity Labels",
                     check_sensitivity_labels, wh_info, cfg,
                 )
                 all_findings.extend(pr.findings)
             else:
                 print(
-                    "  ℹ Phase 10: Sensitivity Labels — SKIPPED "
+                    "  ℹ Phase 6: Sensitivity Labels — SKIPPED "
                     "(warehouse could not be resolved)"
                 )
-                tracker.record(PhaseResult(name="Phase 10: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason="warehouse could not be resolved"))
+                tracker.record(PhaseResult(name="Phase 6: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason="warehouse could not be resolved"))
         else:
             reason = (
                 "disabled in config" if not cfg.check_sensitivity_labels
                 else "no REST token" if not rest_client
                 else "workspace_id not set"
             )
-            print(f"  ℹ Phase 10: Sensitivity Labels — SKIPPED ({reason})")
-            tracker.record(PhaseResult(name="Phase 10: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason=reason))
+            print(f"  ℹ Phase 6: Sensitivity Labels — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 6: Sensitivity Labels", status=PHASE_SKIPPED, skip_reason=reason))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 7: OneLake Data Access Roles (SEC-012) — REST API
+        #   Gated behind LakeWarehouse edition.
+        #   In Delegated mode, findings are reported as INFO.
+        # ================================================================
+        is_onelake_security_supported = is_sql_endpoint
+        onelake_roles: list[dict] | None = None
+        onelake_role_names: list[str] | None = None
+
+        resolved_lakehouse_id: str = ""
+        if (
+            is_onelake_security_supported
+            and rest_client
+            and cfg.workspace_id
+            and (cfg.check_onelake_data_access_roles or cfg.check_onelake_security_sync)
+        ):
+            self._log("Resolving lakehouse_id for OneLake security APIs ...")
+            try:
+                lh_info = rest_client.resolve_lakehouse(
+                    cfg.workspace_id, cfg.warehouse_name,
+                )
+                if lh_info:
+                    resolved_lakehouse_id = lh_info.get("id", "")
+                    self._log(
+                        f"  Resolved lakehouse: {cfg.warehouse_name} → "
+                        f"{resolved_lakehouse_id}"
+                    )
+                else:
+                    self._log(
+                        f"  ⚠ Lakehouse '{cfg.warehouse_name}' not "
+                        f"found in workspace {cfg.workspace_id}."
+                    )
+            except FabricRestError as exc:
+                self._log(f"  ⚠ Could not resolve lakehouse: {exc}")
+
+        # Fetch roles from API once — shared by SEC-012 and SEC-014
+        if (
+            is_onelake_security_supported
+            and rest_client
+            and cfg.workspace_id
+            and resolved_lakehouse_id
+            and (cfg.check_onelake_data_access_roles or cfg.check_onelake_security_sync)
+        ):
+            try:
+                onelake_roles = rest_client.list_data_access_roles(
+                    cfg.workspace_id, resolved_lakehouse_id,
+                )
+                onelake_role_names = [
+                    r.get("name", "<unnamed>") for r in (onelake_roles or [])
+                ]
+            except FabricRestError as exc:
+                self._log(f"  ⚠ Could not fetch OneLake data access roles: {exc}")
+                onelake_roles = None
+
+        if (
+            cfg.check_onelake_data_access_roles
+            and is_onelake_security_supported
+            and onelake_roles is not None
+        ):
+            pr = tracker.run_phase(
+                "Phase 7: OneLake Data Access Roles",
+                check_onelake_data_access_roles, onelake_roles,
+                resolved_lakehouse_id, cfg,
+                user_identity_mode=user_identity_mode,
+            )
+            all_findings.extend(pr.findings)
+        else:
+            reason = (
+                "disabled in config" if not cfg.check_onelake_data_access_roles
+                else "not supported (Warehouse edition)" if not is_onelake_security_supported
+                else "no REST token" if not rest_client
+                else "workspace_id not set" if not cfg.workspace_id
+                else "lakehouse could not be resolved" if not resolved_lakehouse_id
+                else "roles could not be fetched"
+            )
+            print(f"  ℹ Phase 7: OneLake Data Access Roles — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 7: OneLake Data Access Roles", status=PHASE_SKIPPED, skip_reason=reason))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # SQL T-SQL checks — Phases 8-14
+        # ================================================================
+
+        # ================================================================
+        # Phase 8: Schema Permissions (SEC-001)
+        #   Runs always, but downgrades table-level findings in
+        #   User Identity mode.
+        # ================================================================
+        if cfg.check_schema_permissions:
+            pr = tracker.run_phase(
+                "Phase 8: Schema Permissions",
+                check_schema_permissions, spark, cfg.warehouse_name, cfg,
+                user_identity_mode=user_identity_mode,
+            )
+            all_findings.extend(pr.findings)
+        else:
+            print("Phase 8: Schema Permissions — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 8: Schema Permissions", status=PHASE_SKIPPED, skip_reason="disabled in config"))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 9: Custom Roles (SEC-002)
+        #   In User Identity mode, SQL custom roles are inactive —
+        #   produce a single INFO finding instead of running the check.
+        # ================================================================
+        if cfg.check_custom_roles:
+            if user_identity_mode:
+                all_findings.append(Finding(
+                    level=LEVEL_INFO,
+                    category=CATEGORY_ROLES,
+                    check_name="custom_roles_inactive",
+                    object_name=cfg.warehouse_name,
+                    message=(
+                        "Custom database roles are inactive in User "
+                        "Identity mode."
+                    ),
+                    detail=(
+                        "Table-level access is controlled by OneLake "
+                        "security roles. SQL custom roles and their "
+                        "members are not enforced."
+                    ),
+                ))
+                print("Phase 9: Custom Roles — INFO (inactive in User Identity mode)")
+                tracker.record(PhaseResult(name="Phase 9: Custom Roles", status=PHASE_COMPLETED))
+            else:
+                pr = tracker.run_phase(
+                    "Phase 9: Custom Roles",
+                    check_custom_roles, spark, cfg.warehouse_name, cfg,
+                )
+                all_findings.extend(pr.findings)
+        else:
+            print("Phase 9: Custom Roles — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 9: Custom Roles", status=PHASE_SKIPPED, skip_reason="disabled in config"))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Scope resolution for table-level checks
+        # ================================================================
+        _any_table_checks = cfg.check_rls or cfg.check_cls or cfg.check_ddm
+        _skip_table_checks = False
+
+        if _any_table_checks and not user_identity_mode:
+            scope = resolve_table_scope(
+                spark, cfg.warehouse_name,
+                cfg.schema_names, cfg.table_names,
+                check_labels="RLS, CLS, DDM",
+                workspace_id=cfg.workspace_id,
+                warehouse_id=cfg.warehouse_id,
+                log_fn=self._log,
+            )
+            _skip_table_checks = scope.skip
+
+        # ================================================================
+        # Phase 10: Row-Level Security (SEC-003)
+        #   Inactive in User Identity mode.
+        # ================================================================
+        if cfg.check_rls:
+            if user_identity_mode:
+                all_findings.append(Finding(
+                    level=LEVEL_INFO,
+                    category=CATEGORY_RLS,
+                    check_name="rls_inactive",
+                    object_name=cfg.warehouse_name,
+                    message=(
+                        "SQL Row-Level Security is inactive in User "
+                        "Identity mode."
+                    ),
+                    detail=(
+                        "Table-level access is controlled by OneLake "
+                        "security roles. SQL RLS security policies are "
+                        "not enforced."
+                    ),
+                ))
+                print("Phase 10: Row-Level Security — INFO (inactive in User Identity mode)")
+                tracker.record(PhaseResult(name="Phase 10: Row-Level Security", status=PHASE_COMPLETED))
+            elif not _skip_table_checks:
+                pr = tracker.run_phase(
+                    "Phase 10: Row-Level Security",
+                    check_row_level_security, spark, cfg.warehouse_name, cfg,
+                )
+                all_findings.extend(pr.findings)
+            else:
+                print("Phase 10: Row-Level Security — SKIPPED (no tables in scope)")
+                tracker.record(PhaseResult(name="Phase 10: Row-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
+        else:
+            print("Phase 10: Row-Level Security — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 10: Row-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 11: Column-Level Security (SEC-004)
+        #   Inactive in User Identity mode.
+        # ================================================================
+        if cfg.check_cls:
+            if user_identity_mode:
+                all_findings.append(Finding(
+                    level=LEVEL_INFO,
+                    category=CATEGORY_CLS,
+                    check_name="cls_inactive",
+                    object_name=cfg.warehouse_name,
+                    message=(
+                        "SQL Column-Level Security is inactive in User "
+                        "Identity mode."
+                    ),
+                    detail=(
+                        "Table-level access is controlled by OneLake "
+                        "security roles. SQL CLS restrictions are "
+                        "not enforced."
+                    ),
+                ))
+                print("Phase 11: Column-Level Security — INFO (inactive in User Identity mode)")
+                tracker.record(PhaseResult(name="Phase 11: Column-Level Security", status=PHASE_COMPLETED))
+            elif not _skip_table_checks:
+                pr = tracker.run_phase(
+                    "Phase 11: Column-Level Security",
+                    check_column_level_security, spark, cfg.warehouse_name, cfg,
+                )
+                all_findings.extend(pr.findings)
+            else:
+                print("Phase 11: Column-Level Security — SKIPPED (no tables in scope)")
+                tracker.record(PhaseResult(name="Phase 11: Column-Level Security", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
+        else:
+            print("Phase 11: Column-Level Security — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 11: Column-Level Security", status=PHASE_SKIPPED, skip_reason="disabled in config"))
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 12: Dynamic Data Masking (SEC-005)
+        #   DDM is a SQL-engine feature enforced at query time,
+        #   regardless of auth mode.
+        # ================================================================
+        if cfg.check_ddm:
+            if not _skip_table_checks:
+                pr = tracker.run_phase(
+                    "Phase 12: Dynamic Data Masking",
+                    check_dynamic_data_masking, spark, cfg.warehouse_name, cfg,
+                )
+                all_findings.extend(pr.findings)
+            else:
+                print("Phase 12: Dynamic Data Masking — SKIPPED (no tables in scope)")
+                tracker.record(PhaseResult(name="Phase 12: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="no tables in scope"))
+        else:
+            print("Phase 12: Dynamic Data Masking — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 12: Dynamic Data Masking", status=PHASE_SKIPPED, skip_reason="disabled in config"))
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
 
         # ================================================================
-        # Phase 11: Role Alignment (SEC-011) — T-SQL + REST cross-ref
+        # Phase 13: Security Sync Health (SEC-014) — T-SQL
+        #   Only meaningful in User Identity + LakeWarehouse edition.
+        # ================================================================
+        if (
+            cfg.check_onelake_security_sync
+            and is_onelake_security_supported
+        ):
+            pr = tracker.run_phase(
+                "Phase 13: Security Sync Health",
+                check_onelake_security_sync, spark, cfg.warehouse_name,
+                cfg, onelake_role_names,
+            )
+            all_findings.extend(pr.findings)
+        else:
+            reason = (
+                "disabled in config" if not cfg.check_onelake_security_sync
+                else "not supported (Warehouse edition)"
+            )
+            print(f"  ℹ Phase 13: Security Sync Health — SKIPPED ({reason})")
+            tracker.record(PhaseResult(name="Phase 13: Security Sync Health", status=PHASE_SKIPPED, skip_reason=reason))
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 14: Role Alignment (SEC-011) — T-SQL + REST cross-ref
         # ================================================================
         if cfg.check_role_alignment:
             pr = tracker.run_phase(
-                "Phase 11: Role Alignment",
+                "Phase 14: Role Alignment",
                 check_role_alignment, spark, cfg.warehouse_name, cfg,
                 workspace_role_assignments,
             )
             all_findings.extend(pr.findings)
         else:
-            print("  ℹ Phase 11: Role Alignment — SKIPPED (disabled in config)")
-            tracker.record(PhaseResult(name="Phase 11: Role Alignment", status=PHASE_SKIPPED, skip_reason="disabled in config"))
+            print("  ℹ Phase 14: Role Alignment — SKIPPED (disabled in config)")
+            tracker.record(PhaseResult(name="Phase 14: Role Alignment", status=PHASE_SKIPPED, skip_reason="disabled in config"))
 
         # ================================================================
         # Build summary and reports
@@ -644,6 +896,7 @@ class SecurityCheckAdvisor:
         summary = CheckSummary(
             warehouse_name=cfg.warehouse_name,
             warehouse_edition=edition,
+            auth_mode=auth_mode,
             findings=all_findings,
         )
 

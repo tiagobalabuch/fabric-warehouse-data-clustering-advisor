@@ -31,3 +31,11 @@ CATEGORY_SQL_AUDIT = "sql_audit"
 CATEGORY_ITEM_PERMISSIONS = "item_permissions"
 CATEGORY_SENSITIVITY_LABELS = "sensitivity_labels"
 CATEGORY_ROLE_ALIGNMENT = "role_alignment"
+
+# Auth mode category
+CATEGORY_AUTH_MODE = "auth_mode"
+
+# OneLake Security categories
+CATEGORY_ONELAKE_DATA_ACCESS = "onelake_data_access"
+CATEGORY_ONELAKE_SETTINGS = "onelake_settings"
+CATEGORY_ONELAKE_SECURITY_SYNC = "onelake_security_sync"
