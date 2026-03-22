@@ -326,46 +326,6 @@ class SecurityCheckAdvisor:
                 )
 
         # ================================================================
-        # Phase 0b: Auth mode detection (LakeWarehouse only)
-        # ================================================================
-        auth_mode = ""
-        resolved_sql_endpoint_id = cfg.sql_endpoint_id
-
-        if (
-            cfg.check_auth_mode
-            and is_sql_endpoint
-            and rest_client
-            and resolved_sql_endpoint_id
-        ):
-            def _detect_auth_mode_wrapper() -> list[Finding]:
-                nonlocal auth_mode
-                auth_mode, findings = detect_auth_mode(
-                    rest_client, resolved_sql_endpoint_id, cfg,
-                )
-                self._log(f"  Auth mode: {auth_mode or '(unknown)'}")
-                return findings
-
-            pr = tracker.run_phase(
-                "Phase 0b: Auth mode detection", _detect_auth_mode_wrapper,
-            )
-            all_findings.extend(pr.findings)
-        elif cfg.check_auth_mode and is_sql_endpoint and not resolved_sql_endpoint_id:
-            print("  ℹ Phase 0b: Auth mode detection — SKIPPED (sql_endpoint_id not set)")
-            tracker.record(PhaseResult(name="Phase 0b: Auth mode detection", status=PHASE_SKIPPED, skip_reason="sql_endpoint_id not set"))
-        elif cfg.check_auth_mode and not is_sql_endpoint:
-            self._log("  Phase 0b: Auth mode detection — N/A (Warehouse edition)")
-
-        user_identity_mode = auth_mode == "user_identity"
-
-        if auth_mode:
-            mode_desc = "User Identity" if user_identity_mode else "Delegated Identity"
-            print(f"  Auth Mode : {mode_desc}")
-            print()
-
-        if cfg.phase_delay > 0:
-            time.sleep(cfg.phase_delay)
-
-        # ================================================================
         # Resolve warehouse_id from warehouse_name if needed
         # ================================================================
         resolved_warehouse_id = cfg.warehouse_id or cfg.sql_endpoint_id
@@ -418,6 +378,48 @@ class SecurityCheckAdvisor:
                         )
                 except FabricRestError as exc:
                     self._log(f"  ⚠ Could not resolve warehouse_id: {exc}")
+
+        if cfg.phase_delay > 0:
+            time.sleep(cfg.phase_delay)
+
+        # ================================================================
+        # Phase 0b: Auth mode detection (LakeWarehouse only)
+        # ================================================================
+        auth_mode = ""
+        resolved_sql_endpoint_id = cfg.sql_endpoint_id or (
+            resolved_warehouse_id if is_sql_endpoint else ""
+        )
+
+        if (
+            cfg.check_auth_mode
+            and is_sql_endpoint
+            and rest_client
+            and resolved_sql_endpoint_id
+        ):
+            def _detect_auth_mode_wrapper() -> list[Finding]:
+                nonlocal auth_mode
+                auth_mode, findings = detect_auth_mode(
+                    rest_client, resolved_sql_endpoint_id, cfg,
+                )
+                self._log(f"  Auth mode: {auth_mode or '(unknown)'}")
+                return findings
+
+            pr = tracker.run_phase(
+                "Phase 0b: Auth mode detection", _detect_auth_mode_wrapper,
+            )
+            all_findings.extend(pr.findings)
+        elif cfg.check_auth_mode and is_sql_endpoint and not resolved_sql_endpoint_id:
+            print("  ℹ Phase 0b: Auth mode detection — SKIPPED (sql_endpoint_id not resolved)")
+            tracker.record(PhaseResult(name="Phase 0b: Auth mode detection", status=PHASE_SKIPPED, skip_reason="sql_endpoint_id not resolved"))
+        elif cfg.check_auth_mode and not is_sql_endpoint:
+            self._log("  Phase 0b: Auth mode detection — N/A (Warehouse edition)")
+
+        user_identity_mode = auth_mode == "user_identity"
+
+        if auth_mode:
+            mode_desc = "User Identity" if user_identity_mode else "Delegated Identity"
+            print(f"  Auth Mode : {mode_desc}")
+            print()
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)
@@ -826,28 +828,11 @@ class SecurityCheckAdvisor:
 
         # ================================================================
         # Phase 12: Dynamic Data Masking (SEC-005)
-        #   Inactive in User Identity mode.
+        #   DDM is a SQL-engine feature enforced at query time,
+        #   regardless of auth mode.
         # ================================================================
         if cfg.check_ddm:
-            if user_identity_mode:
-                all_findings.append(Finding(
-                    level=LEVEL_INFO,
-                    category=CATEGORY_DDM,
-                    check_name="ddm_inactive",
-                    object_name=cfg.warehouse_name,
-                    message=(
-                        "Dynamic Data Masking is inactive in User "
-                        "Identity mode."
-                    ),
-                    detail=(
-                        "Table-level access is controlled by OneLake "
-                        "security roles. SQL DDM masking rules are "
-                        "not enforced."
-                    ),
-                ))
-                print("Phase 12: Dynamic Data Masking — INFO (inactive in User Identity mode)")
-                tracker.record(PhaseResult(name="Phase 12: Dynamic Data Masking", status=PHASE_COMPLETED))
-            elif not _skip_table_checks:
+            if not _skip_table_checks:
                 pr = tracker.run_phase(
                     "Phase 12: Dynamic Data Masking",
                     check_dynamic_data_masking, spark, cfg.warehouse_name, cfg,

@@ -172,19 +172,17 @@ def check_onelake_security_sync(
 
     # ── Cross-reference with OneLake roles ───────────────────────
     if onelake_role_names is not None:
-        # Normalise: ols_ prefix + role name (ols_RoleName)
-        # For local roles: ols_{roleName}
-        # For cross-lakehouse roles: ols_{guid}_roleName
-        expected_prefixes = {
-            f"ols_{name}" for name in onelake_role_names
-        }
+        # Build case-insensitive lookup sets.
+        # SQL sync roles are lower-cased (e.g. ols_defaultreader)
+        # while API role names preserve original casing (e.g. DefaultReader).
+        ol_names_lower = {n.lower() for n in onelake_role_names}
 
         # Check for stale ols_ roles without matching OneLake role
         for ols_name in ols_role_names:
             # Strip ols_ prefix to get the base name
             base_name = ols_name[4:]  # remove "ols_"
-            # Check if it matches any OneLake role directly
-            matched = base_name in set(onelake_role_names or [])
+            # Case-insensitive match against OneLake role names
+            matched = base_name.lower() in ol_names_lower
             # Also check for cross-lakehouse pattern: {guid}_{roleName}
             if not matched and "_" in base_name:
                 # Could be ols_{guid}_{roleName} from a shortcut
@@ -219,11 +217,13 @@ def check_onelake_security_sync(
                 ))
 
         # Check for OneLake roles missing their ols_ counterpart
+        ols_names_lower = {n.lower() for n in ols_role_names}
         for ol_name in onelake_role_names:
-            expected = f"ols_{ol_name}"
+            expected = f"ols_{ol_name}".lower()
             found = any(
-                ols_name == expected or ols_name.endswith(f"_{ol_name}")
-                for ols_name in ols_role_names
+                ols_lower == expected
+                or ols_lower.endswith(f"_{ol_name.lower()}")
+                for ols_lower in ols_names_lower
             )
             if not found:
                 findings.append(Finding(

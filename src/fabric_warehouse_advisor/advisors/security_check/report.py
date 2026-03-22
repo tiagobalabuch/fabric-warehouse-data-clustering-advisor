@@ -56,22 +56,45 @@ _CATEGORY_LABELS = {
 }
 
 _CATEGORY_ORDER = [
-    CATEGORY_AUTH_MODE,
+    # Workspace & Platform
+    CATEGORY_WORKSPACE_ROLES,
+    CATEGORY_NETWORK,
+    CATEGORY_ONELAKE_SETTINGS,
+    CATEGORY_SENSITIVITY_LABELS,
+    # Item Security
+    CATEGORY_SQL_AUDIT,
+    CATEGORY_ITEM_PERMISSIONS,
+    # OneLake Security
+    CATEGORY_ONELAKE_DATA_ACCESS,
+    CATEGORY_ONELAKE_SECURITY_SYNC,
+    # SQL Security
     CATEGORY_PERMISSIONS,
     CATEGORY_ROLES,
     CATEGORY_RLS,
     CATEGORY_CLS,
     CATEGORY_DDM,
-    CATEGORY_WORKSPACE_ROLES,
-    CATEGORY_NETWORK,
-    CATEGORY_SQL_AUDIT,
-    CATEGORY_ITEM_PERMISSIONS,
-    CATEGORY_SENSITIVITY_LABELS,
+    # Cross-Reference
     CATEGORY_ROLE_ALIGNMENT,
-    CATEGORY_ONELAKE_DATA_ACCESS,
-    CATEGORY_ONELAKE_SETTINGS,
-    CATEGORY_ONELAKE_SECURITY_SYNC,
 ]
+
+# Sidebar section groups — maps each category to a section label.
+# Categories sharing the same label are grouped under one heading.
+_CATEGORY_SECTIONS = {
+    CATEGORY_WORKSPACE_ROLES: "Workspace & Platform",
+    CATEGORY_NETWORK: "Workspace & Platform",
+    CATEGORY_ONELAKE_SETTINGS: "Workspace & Platform",
+    CATEGORY_SENSITIVITY_LABELS: "Workspace & Platform",
+    CATEGORY_SQL_AUDIT: "Item Security",
+    CATEGORY_ITEM_PERMISSIONS: "Item Security",
+    CATEGORY_ONELAKE_DATA_ACCESS: "OneLake Security",
+    CATEGORY_ONELAKE_SECURITY_SYNC: "OneLake Security",
+    CATEGORY_PERMISSIONS: "SQL Security",
+    CATEGORY_ROLES: "SQL Security",
+    CATEGORY_RLS: "SQL Security",
+    CATEGORY_CLS: "SQL Security",
+    CATEGORY_DDM: "SQL Security",
+    CATEGORY_ROLE_ALIGNMENT: "Cross-Reference",
+}
 
 _LEVEL_ICONS = {
     LEVEL_CRITICAL: "❌",
@@ -103,9 +126,9 @@ _AUTH_MODE_EXPLAINER = {
     "user_identity": (
         "This SQL endpoint is running in User Identity mode. "
         "Table-level access is controlled exclusively by OneLake "
-        "security roles. SQL RLS, CLS, DDM, and custom database roles "
-        "are inactive. SQL permissions on views, stored procedures, "
-        "and functions remain enforced."
+        "security roles. SQL RLS, CLS, and custom database roles "
+        "are inactive. Dynamic Data Masking and SQL permissions on "
+        "views, stored procedures, and functions remain enforced."
     ),
     "delegated": (
         "This SQL endpoint is running in Delegated Identity mode. "
@@ -377,7 +400,17 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         if summary.findings_by_category(cat)
     ]
 
-    tabs = [(f"pane-{idx}", label) for idx, (_cat, label) in enumerate(active_cats)]
+    # Build tabs with section dividers for the sidebar
+    tabs: list = []
+    last_section = ""
+    pane_idx = 0
+    for cat, label in active_cats:
+        section = _CATEGORY_SECTIONS.get(cat, "")
+        if section and section != last_section:
+            tabs.append(section)  # plain string = section divider
+            last_section = section
+        tabs.append((f"pane-{pane_idx}", label))
+        pane_idx += 1
 
     # Determine badge label based on edition
     badge_label = _edition_label(summary.warehouse_edition)
@@ -390,6 +423,7 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         tabs=tabs,
         generated_at=captured_at,
         badge_label=badge_label,
+        auth_mode=summary.auth_mode,
     ))
 
     item = _edition_label(summary.warehouse_edition, capitalize=False)
@@ -406,19 +440,6 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         summary.medium_count, summary.low_count,
         summary.info_count, total,
     ))
-
-    # Auth mode explainer banner (HTML)
-    if summary.auth_mode in _AUTH_MODE_EXPLAINER:
-        mode_label = _auth_mode_label(summary.auth_mode)
-        explainer = esc(_AUTH_MODE_EXPLAINER[summary.auth_mode])
-        h.append(
-            '<div style="background:var(--bg-card,#f0f4f8);border-left:4px solid '
-            'var(--accent,#4a90d9);padding:12px 16px;margin:16px 0;'
-            'border-radius:6px;font-size:0.92em;">'
-            f'<strong>Access Mode:</strong> {esc(mode_label)}<br>'
-            f'<span style="color:var(--text-muted,#666);">{explainer}</span>'
-            '</div>'
-        )
 
     if not active_cats:
         h.append(
@@ -442,6 +463,11 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
             f'role="tabpanel"{hidden}>'
         )
         h.append(f'<h2 class="print-title">{esc(label)}</h2>')
+
+        # Contextual auth-mode alerts for affected panes
+        _ui_alert = _auth_mode_pane_alert(cat, summary.auth_mode)
+        if _ui_alert:
+            h.append(_ui_alert)
 
         h.append('<div class="table-container"><div class="table-scroll">')
         h.append('<table>')
@@ -510,21 +536,6 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
         h.append('</div></div>')  # table-scroll + table-container
         h.append('</div>')  # tab-pane
 
-    # ── Auth mode recommendations ─────────────────────────────────
-    if summary.auth_mode in _AUTH_MODE_RECOMMENDATIONS:
-        mode_label = _auth_mode_label(summary.auth_mode)
-        recs = esc(_AUTH_MODE_RECOMMENDATIONS[summary.auth_mode])
-        rec_items = [r.lstrip("• ") for r in recs.split("\n") if r.strip()]
-        h.append(
-            '<div style="margin:24px 0;padding:16px 20px;'
-            'background:var(--bg-card,#f9fafb);border-radius:8px;">'
-            f'<h3 style="margin-top:0;">Recommendations — {esc(mode_label)}</h3>'
-            '<ul style="margin-bottom:0;">'
-        )
-        for ri in rec_items:
-            h.append(f'<li>{ri}</li>')
-        h.append('</ul></div>')
-
     # ── Footer ──────────────────────────────────────────────────────
     h.append(render_footer(
         "Generated by Fabric Warehouse Advisor \u2014 Security Check"
@@ -534,6 +545,64 @@ def generate_html_report(summary: CheckSummary, captured_at: str | None = None) 
 
 
 # -- Helpers -------------------------------------------------------------
+
+# Contextual alerts shown inside specific tab panes based on auth mode.
+_AUTH_MODE_PANE_ALERTS: dict[str, dict[str, tuple[str, str, str]]] = {
+    # auth_mode -> { category -> (alert_type, icon, message) }
+    "user_identity": {
+        CATEGORY_RLS: (
+            "alert-warning", "\u26A0\uFE0F",
+            "SQL Row-Level Security is <strong>inactive</strong> because this "
+            "endpoint is running in <strong>User Identity</strong> mode. "
+            "Table-level access is controlled by OneLake security roles.",
+        ),
+        CATEGORY_CLS: (
+            "alert-warning", "\u26A0\uFE0F",
+            "SQL Column-Level Security is <strong>inactive</strong> in "
+            "<strong>User Identity</strong> mode. Column access is governed "
+            "by OneLake security roles.",
+        ),
+        CATEGORY_ROLES: (
+            "alert-warning", "\u26A0\uFE0F",
+            "Custom database roles are <strong>inactive</strong> in "
+            "<strong>User Identity</strong> mode. Role-based SQL access "
+            "does not apply \u2014 table access is controlled by OneLake "
+            "security roles.",
+        ),
+        CATEGORY_PERMISSIONS: (
+            "alert-info", "\u2139\uFE0F",
+            "In <strong>User Identity</strong> mode, SQL permissions on "
+            "<strong>views, stored procedures, and functions</strong> remain "
+            "enforced. Permissions on tables are inactive \u2014 table access "
+            "is controlled by OneLake security roles.",
+        ),
+    },
+    "delegated": {
+        CATEGORY_ONELAKE_DATA_ACCESS: (
+            "alert-info", "\u2139\uFE0F",
+            "This endpoint is running in <strong>Delegated</strong> mode. "
+            "OneLake data access roles shown here are informational only "
+            "\u2014 they are not enforced at SQL query time. The item "
+            "owner\u2019s identity is used for OneLake access.",
+        ),
+    },
+}
+
+
+def _auth_mode_pane_alert(category: str, auth_mode: str) -> str:
+    """Return a contextual alert HTML div for *category*, or empty string."""
+    alerts = _AUTH_MODE_PANE_ALERTS.get(auth_mode, {})
+    entry = alerts.get(category)
+    if not entry:
+        return ""
+    alert_cls, icon, message = entry
+    return (
+        f'<div class="context-alert {alert_cls}">'
+        f'<span class="context-alert-icon">{icon}</span>'
+        f'<span>{message}</span>'
+        f'</div>'
+    )
+
 
 def _group_findings(findings: List[Finding]) -> Dict[str, List[Finding]]:
     """Group findings by check_name, preserving order."""
