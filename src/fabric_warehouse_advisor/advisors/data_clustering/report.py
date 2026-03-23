@@ -95,7 +95,10 @@ _BP_CARD_CSS = {
     "warn": "warn-card",
 }
 
-_BEST_PRACTICES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
+BestPracticeBullet = tuple[str, str, str]
+BestPracticeCard = tuple[str, str, list[BestPracticeBullet]]
+
+_BEST_PRACTICES: list[BestPracticeCard] = [
     # (card_type, title, [(text, markdown, html), ...])
     ("do", "Optimal Targets", [
         (
@@ -125,9 +128,9 @@ _BEST_PRACTICES: list[tuple[str, str, list[tuple[str, str, str]]]] = [
     ]),
     ("info", "Ingestion Strategy", [
         (
-            "Batch ingestion (>= 1M rows per DML) for optimal clustering.",
-            "Batch ingestion (>= 1 M rows per DML) for optimal clustering quality.",
-            "Use <b>batch ingestion</b> (&ge; 1 M rows per DML operation) "
+            "Batch ingestion (≥ 1M rows per DML) for optimal clustering.",
+            "Batch ingestion (≥ 1M rows per DML) for optimal clustering quality.",
+            "Use <b>batch ingestion</b> (&ge; 1M rows per DML operation) "
             "to ensure optimal clustering quality upon write.",
         ),
         (

@@ -840,21 +840,20 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       var pane = document.getElementById(btn.getAttribute('data-target'));
       if (!pane) return;
+      var countEl = btn.querySelector('.tab-count');
       var tbody = pane.querySelector('tbody');
       if (!tbody) {
         // No table in this pane (e.g. Best Practices cards) — hide badge
-        var badge = btn.querySelector('.tab-count');
-        if (badge) badge.style.display = 'none';
+        if (countEl) countEl.style.display = 'none';
         return;
       }
       var rows = tbody.querySelectorAll('tr');
       var visible = Array.from(rows).filter(function(r) {
         return r.style.display !== 'none';
       }).length;
-      var el = btn.querySelector('.tab-count');
-      if (el) {
-        el.style.display = '';
-        el.textContent = visible;
+      if (countEl) {
+        countEl.style.display = '';
+        countEl.textContent = visible;
       }
       btn.style.opacity =
         (visible === 0 && !btn.classList.contains('active')) ? '0.5' : '';
