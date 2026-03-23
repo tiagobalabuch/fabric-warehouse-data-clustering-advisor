@@ -48,7 +48,7 @@ _ICON_MINUS   = "\u2796"          # ➖  (Not recommended)
 # Each entry: (card_type, title, bullets)
 #   card_type: "do" | "dont" | "info" | "warn"
 #   title:     card heading
-#   bullets:   list of (icon, text_plain, text_md, text_html) tuples
+#   bullets:   list of (text_plain, text_md, text_html) tuples
 
 _BP_SVG_CHECK = (
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" '
@@ -362,7 +362,7 @@ def generate_text_report(
     for card_type, title, bullets in _BEST_PRACTICES:
         icon = _BP_TEXT_ICONS.get(card_type, _ICON_BULB)
         L.append(f"    {icon}  {title}")
-        for text_plain, _md, _html_t in bullets:
+        for text_plain, _text_md, _text_html in bullets:
             L.append(f"       • {text_plain}")
     L.append(f"  {'═' * 58}")
     L.append("")
@@ -499,7 +499,7 @@ def generate_markdown_report(
     for card_type, title, bullets in _BEST_PRACTICES:
         icon = _BP_MD_ICONS.get(card_type, _ICON_BULB)
         md.append(f"### {icon} {title}\n")
-        for _text, text_md, _html_t in bullets:
+        for _text_plain, text_md, _text_html in bullets:
             md.append(f"- {text_md}")
         md.append("")
     md.append("---")
@@ -759,7 +759,7 @@ def generate_html_report(
         h.append('<div class="bp-content">')
         h.append(f'<h4>{esc(title)}</h4>')
         h.append('<ul>')
-        for _text, _md, text_html in bullets:
+        for _text_plain, _text_md, text_html in bullets:
             h.append(f'<li>{text_html}</li>')
         h.append('</ul>')
         h.append('</div></div>')

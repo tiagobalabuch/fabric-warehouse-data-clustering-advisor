@@ -852,7 +852,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return r.style.display !== 'none';
       }).length;
       var el = btn.querySelector('.tab-count');
-      if (el) el.textContent = visible;
+      if (el) {
+        el.style.display = '';
+        el.textContent = visible;
+      }
       btn.style.opacity =
         (visible === 0 && !btn.classList.contains('active')) ? '0.5' : '';
     });
