@@ -23,6 +23,7 @@ Usage
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
@@ -36,7 +37,6 @@ from ...core.warehouse_reader import (
     get_current_clustering_config,
     get_table_row_counts,
     get_frequently_run_queries,
-    estimate_column_cardinality,
     estimate_batch_column_cardinality,
 )
 from ...core.predicate_parser import (
@@ -264,6 +264,7 @@ class DataClusteringAdvisor:
         self._log_kv("max_clustering_columns", cfg.max_clustering_columns)
         self._log_kv("min_recommendation_score", cfg.min_recommendation_score)
         self._log_kv("cardinality_sample_fraction", cfg.cardinality_sample_fraction)
+        self._log_kv("max_parallel_tables", cfg.max_parallel_tables)
         self._log_kv("generate_ctas", cfg.generate_ctas)
         self._log_footer()
 
@@ -634,84 +635,137 @@ class DataClusteringAdvisor:
 
         candidate_cols = set(predicate_agg.keys()) | clustered_cols_set
 
+        # ── Step 1: Group candidate columns by table ──────────────
+        # Instead of one query per column, batch all candidates for
+        # the same table into a single APPROX_COUNT_DISTINCT query.
+        candidate_cols_by_table: Dict[Tuple[str, str], List[str]] = {}
         for schema, table, col in candidate_cols:
-            _cardinality_start = time.perf_counter()
-            self._log(f"  Estimating cardinality: {schema}.{table}.{col} ...")
-            total, distinct, ratio = estimate_column_cardinality(
-                spark,
-                cfg.warehouse_name,
-                schema,
-                table,
-                col,
-                sample_fraction=cfg.cardinality_sample_fraction,
-                workspace_id=cfg.workspace_id,
-                warehouse_id=cfg.warehouse_id,
-            )
-            cardinality_cache[(schema, table, col)] = (total, distinct, ratio)
-            _card_elapsed = time.perf_counter() - _cardinality_start
-            self._log(f"    \u23f1 {schema}.{table}.{col} in {_card_elapsed:.2f}s")
-            if cfg.verbose and total > 0:
-                pct = f"{ratio * 100:.2f}%" if ratio >= 0 else "N/A"
-                self._log(
-                    f"    ├─ {col:<28} total={total:>12,}  "
-                    f"distinct~={distinct:>12,}  ratio={ratio:.6f}  ({pct})"
-                )
+            candidate_cols_by_table.setdefault(
+                (schema, table), []
+            ).append(col)
 
-        # Batch cardinality for columns on full-scan tables
+        # ── Step 2: Add full-scan table columns ───────────────────
         if full_scan_tables:
             from .data_type_support import assess_data_type as _assess_dt
 
-            fs_cols_by_table: Dict[Tuple[str, str], List[str]] = {}
             for meta in full_metadata.collect():
                 tbl_key = (meta.schema_name, meta.table_name)
                 if tbl_key not in full_scan_tables:
                     continue
+                # Skip if already a candidate from predicate/clustering
                 col_key = (
                     meta.schema_name, meta.table_name, meta.column_name
                 )
-                if col_key in cardinality_cache:
-                    continue  # already estimated individually
+                if col_key in candidate_cols:
+                    continue
                 dt_check = _assess_dt(
                     meta.data_type, meta.max_length, meta.precision
                 )
                 if not dt_check.is_supported:
                     continue
-                fs_cols_by_table.setdefault(tbl_key, []).append(
+                candidate_cols_by_table.setdefault(tbl_key, []).append(
                     meta.column_name
                 )
 
-            for (schema, table), cols in fs_cols_by_table.items():
-                _batch_start = time.perf_counter()
-                self._log(
-                    f"  Batch cardinality for full-scan table "
-                    f"{schema}.{table} ({len(cols)} columns) ..."
-                )
-                batch_result = estimate_batch_column_cardinality(
-                    spark,
-                    cfg.warehouse_name,
-                    schema,
-                    table,
-                    cols,
-                    sample_fraction=cfg.cardinality_sample_fraction,
-                    workspace_id=cfg.workspace_id,
-                    warehouse_id=cfg.warehouse_id,
-                )
-                for col_name, (total, distinct, ratio) in batch_result.items():
-                    cardinality_cache[(schema, table, col_name)] = (
-                        total, distinct, ratio,
+        total_tables = len(candidate_cols_by_table)
+        total_columns = sum(len(c) for c in candidate_cols_by_table.values())
+        self._log(
+            f"  Batched {total_columns} columns across "
+            f"{total_tables} table(s)."
+        )
+
+        # ── Step 3: Estimate cardinality (batch per table, parallel)
+        def _estimate_table(
+            tbl_key: Tuple[str, str],
+            cols: List[str],
+        ) -> Dict[Tuple[str, str, str], Tuple[int, int, float]]:
+            """Run a single batched cardinality query for one table."""
+            schema, table = tbl_key
+            _t0 = time.perf_counter()
+            batch_result = estimate_batch_column_cardinality(
+                spark,
+                cfg.warehouse_name,
+                schema,
+                table,
+                cols,
+                sample_fraction=cfg.cardinality_sample_fraction,
+                workspace_id=cfg.workspace_id,
+                warehouse_id=cfg.warehouse_id,
+            )
+            result: Dict[Tuple[str, str, str], Tuple[int, int, float]] = {}
+            for col_name, (total, distinct, ratio) in batch_result.items():
+                result[(schema, table, col_name)] = (total, distinct, ratio)
+                if cfg.verbose and total > 0:
+                    pct = f"{ratio * 100:.2f}%" if ratio >= 0 else "N/A"
+                    self._log(
+                        f"    ├─ {col_name:<28} total={total:>12,}  "
+                        f"distinct~={distinct:>12,}  ratio={ratio:.6f}  ({pct})"
                     )
-                    if cfg.verbose and total > 0:
-                        pct = f"{ratio * 100:.2f}%" if ratio >= 0 else "N/A"
+            _elapsed = time.perf_counter() - _t0
+            self._log(
+                f"  ⏱ {schema}.{table} "
+                f"({len(cols)} col{'s' if len(cols) != 1 else ''}) "
+                f"in {_elapsed:.2f}s"
+            )
+            return result
+
+        max_workers = max(1, cfg.max_parallel_tables)
+        failed_tables: List[str] = []
+
+        if max_workers == 1 or total_tables <= 1:
+            # Sequential — no thread overhead
+            for tbl_key, cols in candidate_cols_by_table.items():
+                self._log(
+                    f"  Batch cardinality for "
+                    f"{tbl_key[0]}.{tbl_key[1]} "
+                    f"({len(cols)} columns) ..."
+                )
+                try:
+                    cardinality_cache.update(_estimate_table(tbl_key, cols))
+                except Exception as exc:
+                    failed_tables.append(f"{tbl_key[0]}.{tbl_key[1]}")
+                    self._log(
+                        f"  [WARN] Cardinality failed for "
+                        f"{tbl_key[0]}.{tbl_key[1]}: {exc}"
+                    )
+        else:
+            # Parallel — one thread per table, capped at max_workers
+            self._log(
+                f"  Running in parallel with up to "
+                f"{max_workers} concurrent table(s) ..."
+            )
+            futures = {}
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for tbl_key, cols in candidate_cols_by_table.items():
+                    self._log(
+                        f"  Submitting {tbl_key[0]}.{tbl_key[1]} "
+                        f"({len(cols)} columns) ..."
+                    )
+                    fut = executor.submit(_estimate_table, tbl_key, cols)
+                    futures[fut] = tbl_key
+
+                for fut in as_completed(futures):
+                    tbl_key = futures[fut]
+                    try:
+                        cardinality_cache.update(fut.result())
+                    except Exception as exc:
+                        failed_tables.append(f"{tbl_key[0]}.{tbl_key[1]}")
                         self._log(
-                            f"    ├─ {col_name:<28} total={total:>12,}  "
-                            f"distinct~={distinct:>12,}  ratio={ratio:.6f}  ({pct})"
+                            f"  [WARN] Cardinality failed for "
+                            f"{tbl_key[0]}.{tbl_key[1]}: {exc}"
                         )
-                _batch_elapsed = time.perf_counter() - _batch_start
-                self._log(f"    \u23f1 {schema}.{table} batch in {_batch_elapsed:.2f}s")
+
         self._log(f"  Cardinality estimated for {len(cardinality_cache)} columns.")
+        if failed_tables:
+            print(
+                f"  \u26a0 Cardinality estimation failed for {len(failed_tables)} "
+                f"table(s): {', '.join(failed_tables)}\n"
+                f"    These tables may receive lower scores due to missing "
+                f"cardinality data."
+            )
         _p6_elapsed = time.perf_counter() - _phase_start
         tracker.record(PhaseResult(name="Phase 6: Cardinality", elapsed=_p6_elapsed))
-        self._log(f"  \u23f1 Phase 6 completed in {_p6_elapsed:.2f}s")
+        self._log(f"  ⏱ Phase 6 completed in {_p6_elapsed:.2f}s")
 
         if cfg.phase_delay > 0:
             time.sleep(cfg.phase_delay)

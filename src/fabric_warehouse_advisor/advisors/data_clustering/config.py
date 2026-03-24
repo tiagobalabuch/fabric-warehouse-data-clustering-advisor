@@ -106,6 +106,14 @@ class DataClusteringConfig:
         Optional list of schemas to restrict analysis to.
         Empty means all user schemas.
 
+    max_parallel_tables : int
+        Maximum number of tables to estimate cardinality for in
+        parallel during Phase 6.  Each table gets a single batched
+        ``APPROX_COUNT_DISTINCT`` query covering all its candidate
+        columns.  Higher values reduce wall-clock time but increase
+        concurrent SQL sessions on the warehouse.  Set to ``1`` to
+        disable parallelism.
+
     verbose : bool
         If ``True``, display intermediate DataFrames for debugging.
 
@@ -147,6 +155,9 @@ class DataClusteringConfig:
     # -- Scope filtering --
     schema_names: list[str] = field(default_factory=list)
     table_names: list[str] = field(default_factory=list)
+
+    # -- Parallelism --
+    max_parallel_tables: int = 4
 
     # -- REST API (for workspace metadata) --
     fabric_token: str = ""
