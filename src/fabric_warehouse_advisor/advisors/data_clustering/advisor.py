@@ -709,6 +709,7 @@ class DataClusteringAdvisor:
             return result
 
         max_workers = max(1, cfg.max_parallel_tables)
+        failed_tables: List[str] = []
 
         if max_workers == 1 or total_tables <= 1:
             # Sequential — no thread overhead
@@ -718,7 +719,14 @@ class DataClusteringAdvisor:
                     f"{tbl_key[0]}.{tbl_key[1]} "
                     f"({len(cols)} columns) ..."
                 )
-                cardinality_cache.update(_estimate_table(tbl_key, cols))
+                try:
+                    cardinality_cache.update(_estimate_table(tbl_key, cols))
+                except Exception as exc:
+                    failed_tables.append(f"{tbl_key[0]}.{tbl_key[1]}")
+                    self._log(
+                        f"  [WARN] Cardinality failed for "
+                        f"{tbl_key[0]}.{tbl_key[1]}: {exc}"
+                    )
         else:
             # Parallel — one thread per table, capped at max_workers
             from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -742,12 +750,20 @@ class DataClusteringAdvisor:
                     try:
                         cardinality_cache.update(fut.result())
                     except Exception as exc:
+                        failed_tables.append(f"{tbl_key[0]}.{tbl_key[1]}")
                         self._log(
                             f"  [WARN] Cardinality failed for "
                             f"{tbl_key[0]}.{tbl_key[1]}: {exc}"
                         )
 
         self._log(f"  Cardinality estimated for {len(cardinality_cache)} columns.")
+        if failed_tables:
+            print(
+                f"  \u26a0 Cardinality estimation failed for {len(failed_tables)} "
+                f"table(s): {', '.join(failed_tables)}\n"
+                f"    These tables may receive lower scores due to missing "
+                f"cardinality data."
+            )
         _p6_elapsed = time.perf_counter() - _phase_start
         tracker.record(PhaseResult(name="Phase 6: Cardinality", elapsed=_p6_elapsed))
         self._log(f"  ⏱ Phase 6 completed in {_p6_elapsed:.2f}s")
