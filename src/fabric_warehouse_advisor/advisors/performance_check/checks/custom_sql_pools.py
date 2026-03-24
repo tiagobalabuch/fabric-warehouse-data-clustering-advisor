@@ -480,6 +480,7 @@ def _check_pool_pressure(
             level = LEVEL_MEDIUM
 
         lookback_label = _format_lookback(lookback)
+        safe_pool_name = pool_name.replace("'", "''")
 
         findings.append(Finding(
             level=level,
@@ -503,7 +504,7 @@ def _check_pool_pressure(
                 f"SELECT [timestamp], sql_pool_name, max_resource_percentage,\n"
                 f"       is_pool_under_pressure\n"
                 f"FROM queryinsights.sql_pool_insights\n"
-                f"WHERE sql_pool_name = '{pool_name.replace(chr(39), chr(39)*2)}'\n"
+                f"WHERE sql_pool_name = '{safe_pool_name}'\n"
                 f"  AND is_pool_under_pressure = 1\n"
                 f"  AND [timestamp] > DATEADD(HOUR, -{lookback}, GETUTCDATE())\n"
                 f"ORDER BY [timestamp] DESC;"
