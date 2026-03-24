@@ -43,7 +43,7 @@ CATEGORY_CUSTOM_SQL_POOLS = "custom_sql_pools"
 # -- Well-known Fabric application name patterns -------------------------
 
 _KNOWN_PATTERNS = {
-    "Fabric Pipelines": r"^Data Integration-to[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
+    "Fabric Pipelines": r"^Data Integration-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     "Power BI": r"^(PowerBIPremium-DirectQuery|Mashup Engine(?: \(PowerBIPremium-Import\))?)",
     "SQL Query Editor": r"DMS_user",
 }
@@ -219,9 +219,9 @@ def _check_resource_sum(
     if total_pct != 100:
         direction = "Under-allocation" if total_pct < 100 else "Over-allocation"
         detail = (
-            f"Unused capacity is wasted."
+            "Unused capacity is wasted."
             if total_pct < 100
-            else f"Over-allocation may lead to unexpected resource contention."
+            else "Over-allocation may lead to unexpected resource contention."
         )
         findings.append(Finding(
             level=LEVEL_HIGH,
@@ -503,7 +503,7 @@ def _check_pool_pressure(
                 f"SELECT [timestamp], sql_pool_name, max_resource_percentage,\n"
                 f"       is_pool_under_pressure\n"
                 f"FROM queryinsights.sql_pool_insights\n"
-                f"WHERE sql_pool_name = '{pool_name}'\n"
+                f"WHERE sql_pool_name = '{pool_name.replace(chr(39), chr(39)*2)}'\n"
                 f"  AND is_pool_under_pressure = 1\n"
                 f"  AND [timestamp] > DATEADD(HOUR, -{lookback}, GETUTCDATE())\n"
                 f"ORDER BY [timestamp] DESC;"
