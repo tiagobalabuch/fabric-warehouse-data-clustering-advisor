@@ -9,7 +9,7 @@ and running your first analysis.
 |-------------|-------|
 | **Microsoft Fabric Workspace** | With at least one Fabric Warehouse or SQL Analytics Endpoint |
 | **Fabric Notebook** | The advisors run inside a Fabric Spark notebook |
-| **Warehouse / SQL Analytics Endpoint access** | The identity running the notebook (your Entra ID / service principal) must have at least **Read access** on the target Warehouse / SQL Endpoint |
+| **Warehouse / SQL Analytics Endpoint access** | The identity running the notebook (your Entra ID / service principal) must have at least **Read access** on the target Warehouse / SQL Analytics Endpoint |
 | **Same tenant** | The target Warehouse / SQL Analytics Endpoint must be in the same Fabric tenant |
 
 !!! info
@@ -39,7 +39,7 @@ For version information, dependencies, and release notes, see the [details](http
 2. In the first cell of your notebook, run:
 
 ```python
-%pip install /lakehouse/default/Files/fabric_warehouse_advisor-1.1.4-py3-none-any.whl
+%pip install /lakehouse/default/Files/fabric_warehouse_advisor-X.Y.Z-py3-none-any.whl
 ```
 
 ### Option C: Fabric Environment

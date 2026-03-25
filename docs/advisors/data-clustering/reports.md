@@ -9,7 +9,7 @@ the same information — choose whichever fits your workflow.
 |--------|--------|----------|
 | **Text** | `result.text_report` | `print()` in a notebook cell; quick console overview |
 | **Markdown** | `result.markdown_report` | Saving as `.md`; rendering in GitHub, wikis, documentation |
-| **HTML** | `result.html_report` | Saving as `.html`; Use a Web Browser for rich visual display or the `displayHTML()` in  Fabric notebooks |
+| **HTML** | `result.html_report` | Saving as `.html`; Use a Web Browser for rich visual display or the `displayHTML()` in Fabric notebooks |
 
 !!! tip "Web Browser is recommended"
     The best way to visualize the report is to save it as `HTML`, which provides the full experience with rich features and interactivity.

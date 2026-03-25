@@ -45,7 +45,7 @@ determine the access mode:
 - **User Identity** — OneLake security roles control table-level access.
   SQL custom roles, RLS, and CLS are not enforced.
 - **Delegated Identity** — traditional SQL security model is active.
-  OneLake data access role findings are downgraded to INFO.
+  All Phase 7 (OneLake Data Access) findings are downgraded to INFO.
 
 The detected mode influences how Phases 7–11 behave (see
 *Auth Mode Gating* below).
