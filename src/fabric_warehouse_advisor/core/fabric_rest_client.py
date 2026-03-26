@@ -405,8 +405,12 @@ class FabricRestClient:
     ) -> Dict[str, Any]:
         """Retrieve the Custom SQL Pools configuration for a workspace.
 
-        ``GET /v1/workspaces/{workspaceId}/warehouses/sqlPoolsConfiguration``
+        ``GET /v1/workspaces/{workspaceId}/warehouses/sqlPoolsConfiguration?beta=True``
 
+        This API is part of a Beta release and is provided for evaluation and development purposes only. 
+        It may change based on feedback and is not recommended for production use. 
+        **When calling this API, callers must specify true as the value for the query parameter beta
+        
         Requires **Administrator** workspace role.
 
         Returns
@@ -419,7 +423,7 @@ class FabricRestClient:
         """
         url = (
             f"{_FABRIC_API_BASE}/workspaces/{workspace_id}"
-            f"/warehouses/sqlPoolsConfiguration"
+            f"/warehouses/sqlPoolsConfiguration?beta=True"
         )
         return self.get(url)
 
