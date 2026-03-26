@@ -9,6 +9,9 @@ permissions:
   contents: write        # Required to create releases, upload assets, and push branches
   pull-requests: write   # Required to create PRs for changelog updates
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
@@ -99,7 +102,7 @@ jobs:
 
             # Process first-parent commits (merge commits + direct pushes)
             while IFS= read -r LINE; do
-              PR_NUM=$(echo "$LINE" | grep -oP 'Merge pull request #\K[0-9]+')
+              PR_NUM=$(echo "$LINE" | grep -oP 'Merge pull request #\K[0-9]+' || true)
 
               if [ -n "$PR_NUM" ]; then
                 PR_INFO=$(gh pr view "$PR_NUM" --repo "$REPO" --json title,labels 2>&1) || {
