@@ -39,7 +39,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install MkDocs Material
-        run: pip install mkdocs-material
+        run: pip install mkdocs-material mkdocs-glightbox
 
       - name: Build docs
         run: mkdocs build --strict
