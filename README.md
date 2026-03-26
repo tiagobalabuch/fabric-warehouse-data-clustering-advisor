@@ -44,17 +44,6 @@ Each advisor produces a rich, interactive HTML report with light and dark themes
   <img src="https://raw.githubusercontent.com/tiagobalabuch/fabric-warehouse-advisor/master/docs/assets/screenshots/performance-check-dark.png" alt="Performance Check - Dark" width="49%">
 </p>
 
-
-## Acknowledgements
-
-Report icons provided by [Flaticon](https://www.flaticon.com/):
-
-- [Cyber security icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/cyber-security)
-- [Performance icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/performance)
-- [Graph icons created by Karacis - Flaticon](https://www.flaticon.com/free-icons/graph)
-- [Idea icons created by berkahicon - Flaticon](https://www.flaticon.com/free-icons/idea)
-- [Warning icons created by Hilmy Abiyyu A. - Flaticon](https://www.flaticon.com/free-icons/warning)
-
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
